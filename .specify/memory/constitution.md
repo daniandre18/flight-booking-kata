@@ -1,31 +1,23 @@
 <!--
 Sync Impact Report
 ==================
-Cambio de versión: plantilla sin versionar → 1.0.0 (ratificación inicial)
+Cambio de versión: 1.0.0 → 1.0.1 (PATCH)
 
-Principios (plantilla genérica → definitivos):
-- [PRINCIPLE_1_NAME] → I. Integridad de reservas primero
-- [PRINCIPLE_2_NAME] → II. Comandos por HTTP, eventos por WebSocket
-- [PRINCIPLE_3_NAME] → III. Contratos compartidos
-- [PRINCIPLE_4_NAME] → IV. Arquitectura hexagonal modular
-- [PRINCIPLE_5_NAME] → V. Pruebas primero en lo crítico
-- (nuevo) VI. Errores explícitos
-- (nuevo) VII. Simplicidad de prototipo
-- (nuevo) VIII. Calidad
-- (nuevo) IX. Documentación como entregable
+Justificación del PATCH: se explicitan códigos que ya encajaban en el espíritu del principio VI
+(errores explícitos y diferenciados), sin eliminar ni redefinir ningún principio. Motivo: la
+clarificación de la spec 001 que exige una clave de administrador y el plan de la feature 001,
+que usa 422 para el límite de asientos y para una Idempotency-Key repetida con otro contenido.
 
-Secciones añadidas:
-- Restricciones técnicas (antes [SECTION_2_NAME])
-- Flujo de desarrollo y puertas de calidad (antes [SECTION_3_NAME])
-- Gobernanza (contenido completo)
+Principios modificados:
+- VI. Errores explícitos: se agrega 401 (clave de administrador ausente o incorrecta) y se
+  detallan los casos 422 (límite de asientos bloqueados, Idempotency-Key repetida con otro
+  contenido).
 
-Secciones eliminadas: ninguna.
+Secciones añadidas: ninguna. Secciones eliminadas: ninguna.
 
-Plantillas dependientes: no se modifican; leen la constitución en tiempo de ejecución.
-- .specify/templates/plan-template.md — ✅ sin cambios necesarios (su "Constitution Check" se
-  resuelve contra este archivo)
-- .specify/templates/spec-template.md — ✅ sin cambios necesarios
-- .specify/templates/tasks-template.md — ✅ sin cambios necesarios
+Plantillas dependientes: sin cambios necesarios (leen la constitución en tiempo de ejecución).
+- specs/001-realtime-flight-booking/plan.md — ✅ Constitution Check actualizado: el 401 deja de
+  figurar como desviación.
 
 TODO diferidos: ninguno.
 -->
@@ -116,7 +108,10 @@ verificar a mano de forma fiable.
 - Todo error de la API DEBE usar el formato único `{ code, message, details }`, definido en
   `shared/`.
 - Códigos HTTP:
-  - `400` petición mal formada; `422` validación de negocio o de esquema fallida.
+  - `400` petición mal formada.
+  - `401` clave de administrador ausente o incorrecta (acciones de administración).
+  - `422` validación de negocio o de esquema fallida, incluidos el límite de asientos
+    bloqueados por cliente y vuelo y una `Idempotency-Key` repetida con otro contenido.
   - `404` el recurso no existe.
   - `409` conflicto de asiento (ya bloqueado o reservado por otro).
   - `410` bloqueo expirado.
@@ -195,4 +190,4 @@ defecto.
   - PATCH: aclaraciones, redacción o erratas sin cambio semántico.
 - Cada plan y cada revisión de código DEBEN verificar el cumplimiento de esta constitución.
 
-**Versión**: 1.0.0 | **Ratificada**: 2026-11-18 | **Última enmienda**: 2026-11-18
+**Versión**: 1.0.1 | **Ratificada**: 2026-11-18 | **Última enmienda**: 2026-11-18

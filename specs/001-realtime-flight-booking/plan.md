@@ -47,8 +47,9 @@ compartido.
 
 **Objetivos de rendimiento**:
 - Un cambio se ve en otra pestaña en menos de 1 s (CE-002, CE-010).
-- Liberación y notificación de bloqueos vencidos en 5 s o menos (CE-003; ver el riesgo en
-  research §11).
+- Liberación y notificación de bloqueos vencidos en 5 s o menos (CE-003); el job de
+  expiración corre cada 2000 ms (`HOLD_SWEEP_INTERVAL_MS`, configurable), así que el peor caso
+  ronda los 2 s (research §11).
 - 100 bloqueos simultáneos sobre un asiento: 1 éxito y 99 conflictos (CE-001).
 - Resincronización tras reconectar en menos de 3 s (CE-008).
 
@@ -74,16 +75,17 @@ compartido.
 | III. Contratos compartidos | ✅ | DTOs, enums, esquemas zod, códigos de error y eventos solo en `@kata/shared`. El backend valida con ellos (nestjs-zod) y el frontend los importa |
 | IV. Hexagonal modular | ✅ | `domain/` y `application/` sin NestJS, Prisma ni Socket.io. Puertos: `Clock`, `PaymentGateway`, `EventPublisher` y repositorios. Módulos `flights`, `seats`, `bookings`, `realtime`, más `admin` y `health` (research §3) |
 | V. Pruebas primero en lo crítico | ✅ | Concurrencia (100 → 1), expiración, confirmación con bloqueo vencido, idempotencia y cancelación con bloqueos: e2e contra PostgreSQL real. Reloj inyectado (`FakeClock`) y `:now` como parámetro en SQL |
-| VI. Errores explícitos | ✅ con adición justificada | Formato único `{ code, message, details }` con 400/402/404/409/410/422. **Adición: 401 `ADMIN_UNAUTHORIZED`** por la clave de administrador (Clarifications); no está en la lista del principio VI. El frontend traduce cada `code` al español y revierte la UI optimista |
+| VI. Errores explícitos | ✅ | Formato único `{ code, message, details }` con 400/401/402/404/409/410/422, según la constitución 1.0.1: 401 `ADMIN_UNAUTHORIZED` para la clave de administrador; 422 `HOLD_LIMIT_REACHED` e `IDEMPOTENCY_KEY_REUSED`. El frontend traduce cada `code` al español y revierte la UI optimista |
 | VII. Simplicidad | ✅ | Monolito modular, identidad anónima por `clientId`, pago ficticio y `docker compose up`. Sin colas, caché ni servicios extra |
 | VIII. Calidad | ✅ | `strict`, ESLint + Prettier sin `any`, logs JSON con pino, `GET /api/health` con verificación de la base, seed determinista y Conventional Commits |
 | IX. Documentación | ✅ | `README.md`, `docs/architecture.md` y `docs/ia.md` en la estructura y en las tareas; se actualizan con cada cambio de diseño |
 
-**Resultado de la puerta (antes de la Fase 0)**: PASA. Hay dos desviaciones, y ambas tienen
-justificación registrada abajo.
+**Resultado de la puerta (antes de la Fase 0)**: PASA. Queda una desviación justificada
+(principio I), registrada abajo. El 401 dejó de ser desviación con la enmienda 1.0.1 de la
+constitución.
 
-**Revisión tras la Fase 1**: PASA. El diseño final mantiene los dos puntos anteriores y añade
-tres refinamientos que refuerzan los principios I, II y VI sin crear desviaciones nuevas:
+**Revisión tras la Fase 1**: PASA. El diseño final mantiene esa desviación y añade tres
+refinamientos que refuerzan los principios I, II y VI sin crear desviaciones nuevas:
 
 - **Lock de la fila del vuelo con orden fijo de locks** (research §6): cierra la carrera entre
   cancelación y bloqueo y garantiza que `seq` sigue el orden de commit.
@@ -188,17 +190,12 @@ negocio con capas hexagonales internas y el frontend por funcionalidad.
 | Desviación | Por qué se necesita | Alternativa más simple descartada porque |
 |------------|---------------------|------------------------------------------|
 | Lectura de los bloqueos del propio cliente antes del `UPDATE` condicional (límite de 4 y vencimiento compartido), bajo `pg_advisory_xact_lock(clientId, flightId)` (principio I) | La spec exige un máximo de 4 bloqueos y un reloj compartido (Clarifications); ambos dependen de los bloqueos existentes del cliente. La lectura no decide la propiedad del asiento: eso lo sigue decidiendo el `UPDATE` condicional, y el advisory lock serializa al mismo cliente en el mismo vuelo | Una restricción declarativa no puede expresar "máximo 4 filas vigentes por cliente y vuelo" con vencimiento por tiempo; un trigger esconde la regla fuera del dominio y es más difícil de probar |
-| Código HTTP 401 `ADMIN_UNAUTHORIZED`, no listado en el principio VI | La clarificación de la spec exige una clave de administrador para retrasar o cancelar; una credencial ausente o incorrecta necesita un código propio | 403 implica una identidad autenticada sin permiso, que aquí no existe; reutilizar 422 confundiría un problema de acceso con uno de validación. Conviene una enmienda PATCH de la constitución (1.0.1) para listar el 401 |
 
 ## Riesgos y puntos abiertos
 
-1. **CE-003 con intervalo de 5 s**: en el peor caso, la notificación del vencimiento llega
-   apenas después de 5 s. `HOLD_SWEEP_INTERVAL_MS` es configurable; se recomienda 2000–3000 ms.
-   Se mantiene 5000 por decisión del documento fuente hasta confirmar el cambio (research §11).
-2. **Evento perdido entre commit y publicación** (caída del proceso en ese instante): no hay
+1. **Evento perdido entre commit y publicación** (caída del proceso en ese instante): no hay
    outbox. Los clientes lo corrigen con el snapshot al detectar el hueco de `seq` o al
    reconectar (research §13).
-3. **Enmienda de la constitución**: registrar el 401 en el principio VI (versión 1.0.1, PATCH).
 
 ## Fase 2 (fuera de este comando)
 

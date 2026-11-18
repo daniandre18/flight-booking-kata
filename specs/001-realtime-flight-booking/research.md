@@ -212,8 +212,8 @@ tras el commit ya no encuentra bloqueos y respondería 410); tabla con estado "p
 
 ## 11. Expiración de bloqueos
 
-**Decisión**: un job con `@nestjs/schedule` cada 5 s (`HOLD_SWEEP_INTERVAL_MS`, por defecto
-5000) recorre los vuelos con bloqueos vencidos. Por cada vuelo: bloquea la fila del vuelo,
+**Decisión**: un job con `@nestjs/schedule` cada 2 s (`HOLD_SWEEP_INTERVAL_MS`, por defecto
+2000, configurable) recorre los vuelos con bloqueos vencidos. Por cada vuelo: bloquea la fila del vuelo,
 libera con `UPDATE seats ... WHERE status = 'HELD' AND hold_expires_at <= :now RETURNING`,
 avanza `seq` y publica `seat:released` con `reason: EXPIRED`. Al arrancar, el job corre una
 vez antes de aceptar tráfico. Además, toda operación trata un bloqueo vencido como disponible
@@ -223,12 +223,14 @@ snapshot y las estadísticas lo cuentan como disponible.
 **Razón**: la corrección no depende del job; el job solo existe para notificar a tiempo
 (RF-012) y limpiar tras un reinicio (RF-032).
 
-**Riesgo anotado**: con un intervalo de 5 s, un bloqueo que vence justo después de una pasada
-se notifica a los 5 s más el tiempo de la transacción, apenas por encima del máximo de CE-003.
-El intervalo es configurable; bajarlo a 2–3 s da margen. Se mantiene 5 s por decisión del
-documento fuente hasta que se confirme el cambio.
+**Intervalo**: el documento fuente proponía 5 s, pero en el peor caso (un bloqueo que vence
+justo después de una pasada) la notificación llegaría a los 5 s más el tiempo de la
+transacción, por encima del máximo de CE-003. Con 2 s el peor caso es de unos 2 s, con margen
+amplio. El costo es una consulta indexada (`hold_expires_at WHERE status = 'HELD'`) cada 2 s,
+despreciable. Ajuste confirmado por el usuario el 2026-11-18.
 
-**Alternativas descartadas**: un temporizador por bloqueo en memoria (se pierde al reiniciar,
+**Alternativas descartadas**: intervalo de 5 s (incumple CE-003 en el peor caso); 1 s o menos
+(más carga sin beneficio visible); un temporizador por bloqueo en memoria (se pierde al reiniciar,
 no escala a varias instancias); `pg_cron` (extensión extra); solo verificación perezosa sin job
 (los demás usuarios no se enterarían del vencimiento).
 
@@ -337,7 +339,7 @@ Los errores de zod se devuelven como `422 VALIDATION_ERROR` con la lista de camp
 `details` (nestjs-zod responde 400 por defecto; el filtro lo ajusta). La clave de administrador
 se compara en tiempo constante (`timingSafeEqual`).
 
-**Razón**: principio VI. El 401 es una adición justificada en el Constitution Check.
+**Razón**: principio VI (constitución 1.0.1, que lista el 401 y los casos 422 de esta tabla).
 
 **Alternativas descartadas**: 403 para la clave incorrecta (no hay identidad autenticada que
 autorizar; 401 es la convención para credencial ausente o inválida); GraphQL (los códigos HTTP

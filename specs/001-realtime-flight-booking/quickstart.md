@@ -22,7 +22,7 @@ Plantilla en `.env.example` (raíz). Valores por defecto para la demo:
 | `DATABASE_URL` | `postgresql://kata:kata@postgres:5432/kata` | Conexión de la api |
 | `ADMIN_KEY` | `demo-admin-key` | Clave para retrasar o cancelar vuelos (cámbiala fuera de la demo) |
 | `HOLD_TTL_SECONDS` | `600` | Duración del bloqueo compartido |
-| `HOLD_SWEEP_INTERVAL_MS` | `5000` | Intervalo del job de expiración |
+| `HOLD_SWEEP_INTERVAL_MS` | `2000` | Intervalo del job de expiración (configurable) |
 | `PORT` | `3000` | Puerto de la api |
 | `LOG_LEVEL` | `info` | Nivel de logs JSON |
 
@@ -103,7 +103,8 @@ incógnito (cada una genera su propio `clientId`).
 5. Ventana 1: clic de nuevo en 12C. **Esperado**: se libera en ambas ventanas.
 6. Recarga la ventana 1. **Esperado**: recuperas tus bloqueos con el tiempo restante correcto.
 7. Para probar el vencimiento rápido, levanta con `HOLD_TTL_SECONDS=60`. **Esperado**: al llegar
-   a 00:00 los asientos vuelven a disponibles en ambas ventanas en máximo 5 s.
+   a 00:00 los asientos vuelven a disponibles en ambas ventanas en unos 2 s (máximo 5 s,
+   CE-003).
 
 ### Historia 3: confirmación
 
