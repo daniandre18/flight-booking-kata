@@ -1,0 +1,428 @@
+openapi: 3.1.0
+info:
+  title: Flight Booking Realtime API
+  version: 1.0.0
+  description: |
+    API REST de comandos y consultas. Los cambios se difunden por Socket.io (ver
+    realtime-events.md) solo después del commit. Todos los errores usan ErrorResponse.
+    Los esquemas fuente viven en @kata/shared (zod); este documento los refleja.
+servers:
+  - url: /api
+tags:
+  - name: flights
+  - name: seats
+  - name: bookings
+  - name: admin
+  - name: health
+
+paths:
+  /flights:
+    get:
+      tags: [flights]
+      summary: Buscar vuelos por ruta y fecha (hora de Bogotá), ordenados por salida
+      operationId: searchFlights
+      parameters:
+        - { name: origin, in: query, required: true, schema: { $ref: '#/components/schemas/AirportCode' } }
+        - { name: destination, in: query, required: true, schema: { $ref: '#/components/schemas/AirportCode' } }
+        - { name: date, in: query, required: true, schema: { type: string, format: date }, description: 'YYYY-MM-DD, no anterior a hoy en America/Bogota' }
+      responses:
+        '200':
+          description: Vuelos encontrados (lista vacía si no hay)
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/FlightDto' } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /flights/{flightId}:
+    get:
+      tags: [flights]
+      summary: Detalle de un vuelo
+      operationId: getFlight
+      parameters: [ { $ref: '#/components/parameters/FlightId' } ]
+      responses:
+        '200': { description: Vuelo, content: { application/json: { schema: { $ref: '#/components/schemas/FlightDto' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /flights/{flightId}/seats:
+    get:
+      tags: [seats]
+      summary: Snapshot del mapa de asientos con la secuencia del vuelo
+      description: Los bloqueos vencidos se presentan como AVAILABLE (vista perezosa).
+      operationId: getSeatMap
+      parameters: [ { $ref: '#/components/parameters/FlightId' } ]
+      responses:
+        '200': { description: Snapshot, content: { application/json: { schema: { $ref: '#/components/schemas/SeatMapSnapshot' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /flights/{flightId}/stats:
+    get:
+      tags: [flights]
+      summary: Ocupación del vuelo para el tablero
+      operationId: getFlightStats
+      parameters: [ { $ref: '#/components/parameters/FlightId' } ]
+      responses:
+        '200': { description: Estadísticas, content: { application/json: { schema: { $ref: '#/components/schemas/FlightStatsDto' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /flights/{flightId}/events:
+    get:
+      tags: [flights]
+      summary: Registro de actividad reciente del vuelo (más reciente primero)
+      operationId: getFlightEvents
+      parameters:
+        - { $ref: '#/components/parameters/FlightId' }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        '200':
+          description: Eventos
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/ActivityEntryDto' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /flights/{flightId}/seats/{seatId}/hold:
+    post:
+      tags: [seats]
+      summary: Bloquear un asiento para el cliente (vencimiento compartido)
+      operationId: holdSeat
+      parameters:
+        - { $ref: '#/components/parameters/FlightId' }
+        - { $ref: '#/components/parameters/SeatId' }
+        - { $ref: '#/components/parameters/ClientId' }
+      responses:
+        '201': { description: Bloqueado, content: { application/json: { schema: { $ref: '#/components/schemas/HoldSeatResponse' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: 'SEAT_UNAVAILABLE o FLIGHT_NOT_BOOKABLE', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '422': { description: 'HOLD_LIMIT_REACHED (ya tiene 4 bloqueos en el vuelo)', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    delete:
+      tags: [seats]
+      summary: Liberar un asiento bloqueado por el propio cliente
+      operationId: releaseSeat
+      parameters:
+        - { $ref: '#/components/parameters/FlightId' }
+        - { $ref: '#/components/parameters/SeatId' }
+        - { $ref: '#/components/parameters/ClientId' }
+      responses:
+        '204': { description: Liberado }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: 'SEAT_NOT_HELD (no es del cliente o ya venció)', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+  /clients/me/holds:
+    get:
+      tags: [seats]
+      summary: Bloqueos vigentes del cliente (para recuperar tras recargar)
+      operationId: getMyHolds
+      parameters:
+        - { $ref: '#/components/parameters/ClientId' }
+        - { name: flightId, in: query, required: false, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Bloqueos, content: { application/json: { schema: { $ref: '#/components/schemas/MyHoldsResponse' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /bookings:
+    post:
+      tags: [bookings]
+      summary: Confirmar todos los bloqueos vigentes del cliente en un vuelo
+      operationId: createBooking
+      parameters:
+        - { $ref: '#/components/parameters/ClientId' }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateBookingRequest' } } }
+      responses:
+        '201': { description: Reserva creada, content: { application/json: { schema: { $ref: '#/components/schemas/BookingDto' } } } }
+        '200':
+          description: Reintento con la misma Idempotency-Key; misma reserva
+          headers: { Idempotent-Replayed: { schema: { type: string, enum: ['true'] } } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/BookingDto' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '402': { description: PAYMENT_DECLINED (los bloqueos se conservan), content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: FLIGHT_NOT_BOOKABLE (por ejemplo, vuelo cancelado), content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '410': { description: HOLD_EXPIRED, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '422': { description: 'VALIDATION_ERROR, PASSENGERS_MISMATCH o IDEMPOTENCY_KEY_REUSED', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+  /bookings/lookup:
+    post:
+      tags: [bookings]
+      summary: Consultar un boleto con código y correo del comprador
+      description: Si el código o el correo no coinciden, responde 404 con el mismo mensaje.
+      operationId: lookupBooking
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/BookingLookupRequest' } } }
+      responses:
+        '200': { description: Boleto, content: { application/json: { schema: { $ref: '#/components/schemas/BookingDto' } } } }
+        '404': { description: BOOKING_NOT_FOUND, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/flights/{flightId}/status:
+    patch:
+      tags: [admin]
+      summary: Retrasar o cancelar un vuelo
+      operationId: updateFlightStatus
+      parameters:
+        - { $ref: '#/components/parameters/FlightId' }
+        - { name: X-Admin-Key, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/UpdateFlightStatusRequest' } } }
+      responses:
+        '200': { description: Vuelo actualizado, content: { application/json: { schema: { $ref: '#/components/schemas/FlightDto' } } } }
+        '401': { description: ADMIN_UNAUTHORIZED, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: FLIGHT_STATUS_CONFLICT (vuelo ya cancelado), content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '422': { description: 'VALIDATION_ERROR o INVALID_DELAY', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+  /health:
+    get:
+      tags: [health]
+      summary: Estado del servicio y de la base de datos
+      operationId: health
+      responses:
+        '200':
+          description: Sano
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, db]
+                properties:
+                  status: { type: string, enum: [ok] }
+                  db: { type: string, enum: [up] }
+        '503': { description: Base de datos no disponible, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+components:
+  parameters:
+    FlightId: { name: flightId, in: path, required: true, schema: { type: string, format: uuid } }
+    SeatId: { name: seatId, in: path, required: true, schema: { $ref: '#/components/schemas/SeatCode' } }
+    ClientId: { name: X-Client-Id, in: header, required: true, schema: { type: string, format: uuid }, description: Identidad anónima del cliente }
+
+  responses:
+    BadRequest:
+      description: 'BAD_REQUEST, CLIENT_ID_REQUIRED o IDEMPOTENCY_KEY_REQUIRED'
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+    NotFound:
+      description: 'FLIGHT_NOT_FOUND o SEAT_NOT_FOUND'
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+    ValidationError:
+      description: VALIDATION_ERROR
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+
+  schemas:
+    AirportCode: { type: string, enum: [BOG, MDE, CLO, CTG, BAQ] }
+    SeatCode: { type: string, pattern: '^([1-9]|[12][0-9]|30)[A-F]$', examples: ['12C'] }
+    SeatStatus: { type: string, enum: [AVAILABLE, HELD, BOOKED] }
+    SeatType: { type: string, enum: [WINDOW, MIDDLE, AISLE] }
+    FlightStatus: { type: string, enum: [SCHEDULED, DELAYED, CANCELLED, SOLD_OUT] }
+
+    ErrorCode:
+      type: string
+      enum:
+        - BAD_REQUEST
+        - CLIENT_ID_REQUIRED
+        - IDEMPOTENCY_KEY_REQUIRED
+        - ADMIN_UNAUTHORIZED
+        - PAYMENT_DECLINED
+        - FLIGHT_NOT_FOUND
+        - SEAT_NOT_FOUND
+        - BOOKING_NOT_FOUND
+        - SEAT_UNAVAILABLE
+        - SEAT_NOT_HELD
+        - FLIGHT_NOT_BOOKABLE
+        - FLIGHT_STATUS_CONFLICT
+        - HOLD_EXPIRED
+        - VALIDATION_ERROR
+        - HOLD_LIMIT_REACHED
+        - PASSENGERS_MISMATCH
+        - INVALID_DELAY
+        - IDEMPOTENCY_KEY_REUSED
+        - INTERNAL_ERROR
+
+    ErrorResponse:
+      type: object
+      required: [code, message, details]
+      properties:
+        code: { $ref: '#/components/schemas/ErrorCode' }
+        message: { type: string, description: Mensaje en español para registro; el frontend muestra su propia traducción por code }
+        details:
+          description: 'Contexto opcional; en VALIDATION_ERROR, lista de campos'
+          oneOf:
+            - type: 'null'
+            - type: object
+              additionalProperties: true
+            - type: array
+              items:
+                type: object
+                required: [path, message]
+                properties:
+                  path: { type: string }
+                  message: { type: string }
+
+    FlightDto:
+      type: object
+      required: [id, flightNumber, origin, destination, scheduledDepartureAt, departureAt, arrivalAt, durationMinutes, fare, status, delayed, availableSeats, capacity]
+      properties:
+        id: { type: string, format: uuid }
+        flightNumber: { type: string, examples: [KT1234] }
+        origin: { $ref: '#/components/schemas/AirportCode' }
+        destination: { $ref: '#/components/schemas/AirportCode' }
+        scheduledDepartureAt: { type: string, format: date-time }
+        departureAt: { type: string, format: date-time }
+        arrivalAt: { type: string, format: date-time }
+        durationMinutes: { type: integer }
+        fare: { type: integer, description: COP por asiento }
+        status: { $ref: '#/components/schemas/FlightStatus' }
+        delayed: { type: boolean }
+        availableSeats: { type: integer }
+        capacity: { type: integer, examples: [180] }
+
+    SeatDto:
+      type: object
+      required: [seatId, row, letter, type, status, price, holderTag, holdExpiresAt]
+      properties:
+        seatId: { $ref: '#/components/schemas/SeatCode' }
+        row: { type: integer, minimum: 1, maximum: 30 }
+        letter: { type: string, enum: [A, B, C, D, E, F] }
+        type: { $ref: '#/components/schemas/SeatType' }
+        status: { $ref: '#/components/schemas/SeatStatus' }
+        price: { type: integer }
+        holderTag: { type: ['string', 'null'], description: 'Tag del dueño si HELD; nunca el clientId' }
+        holdExpiresAt: { type: ['string', 'null'], format: date-time }
+
+    SeatMapSnapshot:
+      type: object
+      required: [flight, seats, seq, serverNow]
+      properties:
+        flight: { $ref: '#/components/schemas/FlightDto' }
+        seats: { type: array, minItems: 180, maxItems: 180, items: { $ref: '#/components/schemas/SeatDto' } }
+        seq: { type: integer, description: Secuencia del vuelo en el momento del snapshot }
+        serverNow: { type: string, format: date-time }
+
+    HoldSeatResponse:
+      type: object
+      required: [flightId, seatId, holdExpiresAt, holderTag, seq, serverNow]
+      properties:
+        flightId: { type: string, format: uuid }
+        seatId: { $ref: '#/components/schemas/SeatCode' }
+        holdExpiresAt: { type: string, format: date-time, description: Vencimiento compartido de todos los bloqueos del cliente en el vuelo }
+        holderTag: { type: string }
+        seq: { type: integer }
+        serverNow: { type: string, format: date-time }
+
+    MyHoldsResponse:
+      type: object
+      required: [holderTag, serverNow, holds]
+      properties:
+        holderTag: { type: string }
+        serverNow: { type: string, format: date-time }
+        holds:
+          type: array
+          items:
+            type: object
+            required: [flightId, seatIds, holdExpiresAt]
+            properties:
+              flightId: { type: string, format: uuid }
+              seatIds: { type: array, maxItems: 4, items: { $ref: '#/components/schemas/SeatCode' } }
+              holdExpiresAt: { type: string, format: date-time }
+
+    FlightStatsDto:
+      type: object
+      required: [flightId, available, held, booked, total, occupancyPercent, seq]
+      properties:
+        flightId: { type: string, format: uuid }
+        available: { type: integer }
+        held: { type: integer }
+        booked: { type: integer }
+        total: { type: integer, description: 'available + held + booked' }
+        occupancyPercent: { type: number, description: 'booked / total × 100, un decimal' }
+        seq: { type: integer }
+
+    ActivityEntryDto:
+      type: object
+      required: [seq, type, seatId, status, occurredAt]
+      properties:
+        seq: { type: integer }
+        type: { type: string, enum: [SEAT_HELD, SEAT_RELEASED, SEAT_BOOKED, FLIGHT_UPDATED] }
+        seatId: { oneOf: [ { $ref: '#/components/schemas/SeatCode' }, { type: 'null' } ] }
+        status: { type: string, description: Nuevo estado del asiento o del vuelo }
+        reason: { type: string, enum: [MANUAL, EXPIRED, FLIGHT_CANCELLED] }
+        occurredAt: { type: string, format: date-time }
+
+    CreateBookingRequest:
+      type: object
+      required: [flightId, buyer, passengers, card]
+      properties:
+        flightId: { type: string, format: uuid }
+        buyer:
+          type: object
+          required: [name, email]
+          properties:
+            name: { type: string, minLength: 2, maxLength: 100 }
+            email: { type: string, format: email }
+        passengers:
+          type: array
+          minItems: 1
+          maxItems: 4
+          description: Un pasajero por cada asiento bloqueado vigente del cliente en el vuelo
+          items:
+            type: object
+            required: [seatId, name]
+            properties:
+              seatId: { $ref: '#/components/schemas/SeatCode' }
+              name: { type: string, minLength: 2, maxLength: 100 }
+        card:
+          type: object
+          required: [number, expiry, cvv]
+          description: 'Ficticia. 4000000000000002 siempre se rechaza'
+          properties:
+            number: { type: string, pattern: '^[0-9]{16}$' }
+            expiry: { type: string, pattern: '^(0[1-9]|1[0-2])/[0-9]{2}$', description: 'MM/YY, futuro' }
+            cvv: { type: string, pattern: '^[0-9]{3}$' }
+
+    BookingLookupRequest:
+      type: object
+      required: [code, email]
+      properties:
+        code: { type: string, pattern: '^[A-Za-z0-9]{6}$' }
+        email: { type: string, format: email }
+
+    BookingDto:
+      type: object
+      required: [code, flight, buyer, passengers, total, cardLast4, createdAt]
+      properties:
+        code: { type: string, pattern: '^[A-Z0-9]{6}$' }
+        flight: { $ref: '#/components/schemas/FlightDto' }
+        buyer:
+          type: object
+          required: [name, email]
+          properties:
+            name: { type: string }
+            email: { type: string, format: email }
+        passengers:
+          type: array
+          items:
+            type: object
+            required: [seatId, name, type]
+            properties:
+              seatId: { $ref: '#/components/schemas/SeatCode' }
+              name: { type: string }
+              type: { $ref: '#/components/schemas/SeatType' }
+        total: { type: integer }
+        cardLast4: { type: string, pattern: '^[0-9]{4}$' }
+        createdAt: { type: string, format: date-time }
+
+    UpdateFlightStatusRequest:
+      oneOf:
+        - type: object
+          required: [status, newDepartureAt]
+          properties:
+            status: { type: string, enum: [DELAYED] }
+            newDepartureAt: { type: string, format: date-time }
+        - type: object
+          required: [status]
+          properties:
+            status: { type: string, enum: [CANCELLED] }

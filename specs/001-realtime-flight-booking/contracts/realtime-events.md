@@ -1,0 +1,89 @@
+# Catálogo de eventos en tiempo real (Socket.io)
+
+**Fuente de verdad en código**: `@kata/shared` (interfaces `ServerToClientEvents` y
+`ClientToServerEvents`, constantes `RealtimeEvents` y esquemas zod de cada payload). Este
+documento las describe.
+
+## Conexión
+
+| Aspecto | Valor |
+|---------|-------|
+| Namespace | `/realtime` |
+| Ruta | `/socket.io` (por defecto; nginx hace proxy con upgrade) |
+| Handshake | `auth: { clientId: <uuid> }`. Sin `clientId` válido se acepta igual, pero solo para lectura: los eventos no dependen del cliente |
+| Rooms | `flight:{flightId}` (mapa y tablero) y `search` (resultados de búsqueda) |
+| Reconexión | Automática del cliente Socket.io; al reconectar, el cliente vuelve a unirse a sus rooms y pide snapshot |
+
+El socket **no acepta comandos** de negocio (principio II): bloquear, liberar, confirmar y
+cambiar estado van por REST ([openapi.yaml](./openapi.yaml)). Los eventos se emiten solo
+**después del commit**.
+
+## Cliente → servidor
+
+| Evento | Payload | Ack | Efecto |
+|--------|---------|-----|--------|
+| `flight:join` | `{ flightId: uuid }` | `{ ok: true, seq: number }` o `{ ok: false, code: 'FLIGHT_NOT_FOUND' }` | Une el socket al room `flight:{flightId}` |
+| `flight:leave` | `{ flightId: uuid }` | `{ ok: true }` | Sale del room |
+| `search:subscribe` | `{}` | `{ ok: true }` | Une el socket al room `search` |
+
+## Servidor → cliente
+
+### Campos comunes (`BaseEvent`)
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `flightId` | uuid | Vuelo afectado |
+| `seq` | integer | Secuencia del vuelo; aumenta en 1 por evento de asiento o de vuelo |
+| `occurredAt` | ISO 8601 UTC | Hora del reloj inyectado al hacer el cambio |
+
+### Eventos
+
+| Evento | Rooms | Campos adicionales | Cuándo |
+|--------|-------|--------------------|--------|
+| `seat:held` | `flight:{id}` | `seatId`, `status: 'HELD'`, `holdExpiresAt`, `holderTag` | Bloqueo, incluida la toma de un bloqueo vencido |
+| `seat:released` | `flight:{id}` | `seatId`, `status: 'AVAILABLE'`, `reason: 'MANUAL' \| 'EXPIRED' \| 'FLIGHT_CANCELLED'` | Liberación manual, vencimiento (job) o cancelación del vuelo |
+| `seat:booked` | `flight:{id}` | `seatId`, `status: 'BOOKED'` | Confirmación; un evento por asiento con `seq` consecutivas |
+| `flight:updated` | `flight:{id}`, `search` | `status`, `departureAt`, `arrivalAt`, `scheduledDepartureAt`, `delayed`, `change: 'DELAYED' \| 'CANCELLED' \| 'SOLD_OUT'` | Retraso, cancelación o AGOTADO |
+| `flight:stats` | `flight:{id}`, `search` | `stats: { available, held, booked, total }` | Una vez por transacción que cambia asientos o estado, con la `seq` del último evento de esa transacción |
+
+`holderTag` = primeros 16 caracteres hexadecimales de SHA-256(`clientId`). El `clientId` nunca
+viaja en un evento. El frontend obtiene su propio tag en `GET /clients/me/holds`.
+
+### Ejemplos
+
+```json
+{ "event": "seat:held", "data": {
+  "flightId": "5b0c6f1e-0d3a-5f7e-9c41-2a8e1f0b7d10", "seq": 42,
+  "occurredAt": "2026-11-19T14:03:11.204Z", "seatId": "12C", "status": "HELD",
+  "holdExpiresAt": "2026-11-19T14:13:11.204Z", "holderTag": "9f86d081884c7d65" } }
+```
+
+```json
+{ "event": "seat:released", "data": {
+  "flightId": "5b0c6f1e-0d3a-5f7e-9c41-2a8e1f0b7d10", "seq": 43,
+  "occurredAt": "2026-11-19T14:13:12.010Z", "seatId": "12C", "status": "AVAILABLE",
+  "reason": "EXPIRED" } }
+```
+
+```json
+{ "event": "flight:stats", "data": {
+  "flightId": "5b0c6f1e-0d3a-5f7e-9c41-2a8e1f0b7d10", "seq": 43,
+  "occurredAt": "2026-11-19T14:13:12.010Z",
+  "stats": { "available": 170, "held": 2, "booked": 8, "total": 180 } } }
+```
+
+## Reglas para el cliente
+
+1. **Arranque**: emitir `flight:join` → pedir `GET /flights/:id/seats` → aplicar los eventos
+   recibidos mientras tanto cuya `seq` sea mayor a la del snapshot.
+2. **Orden y duplicados**: aplicar un evento de asiento o de vuelo solo si
+   `seq === ultimaSeq + 1`. Si `seq <= ultimaSeq`, descartarlo (duplicado o viejo).
+3. **Huecos**: si `seq > ultimaSeq + 1`, pedir el snapshot de nuevo y deshabilitar las acciones
+   hasta tenerlo.
+4. **Estadísticas**: aplicar `flight:stats` si su `seq` es mayor o igual a la del último
+   `flight:stats` aplicado; no avanza `ultimaSeq`.
+5. **Reconexión**: al reconectar, volver a unirse a los rooms, pedir el snapshot (y
+   `GET /clients/me/holds` en el mapa y el pago) y volver a permitir acciones solo después.
+6. **Resultados de búsqueda**: filtrar `flight:updated` y `flight:stats` por los vuelos listados
+   y aplicar por `flightId` la regla de `seq` mayor a la última vista para ese vuelo.
+7. **Propiedad**: un asiento `HELD` es "mío" si `holderTag` coincide con el propio.
