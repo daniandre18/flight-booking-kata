@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { EVENT_PUBLISHER, type EventPublisher } from './application/event-publisher';
 import { FLIGHT_EVENT_LOG, type FlightEventLog } from './application/flight-event-log.port';
+import { FLIGHT_EVENT_QUERY } from './application/flight-event-query.port';
 import {
   FLIGHT_STATS_READER,
   type FlightStatsReader,
@@ -9,6 +10,7 @@ import { FLIGHT_WRITE_CONTEXT, type FlightWriteContext } from './application/fli
 import { FLIGHT_WRITE_LOCK, type FlightWriteLock } from './application/flight-write-lock.port';
 import { UNIT_OF_WORK, type UnitOfWork } from './application/unit-of-work';
 import { CLOCK, type Clock } from './domain/clock';
+import { PrismaFlightEventQuery } from './infrastructure/persistence/flight-event-query';
 import { PrismaFlightEventLog } from './infrastructure/persistence/flight-events.writer';
 import { PrismaFlightStatsReader } from './infrastructure/persistence/flight-stats.query';
 import { PrismaFlightWriteLock } from './infrastructure/persistence/flight-write-lock';
@@ -45,6 +47,7 @@ function buildFlightWriteContext(
     { provide: UNIT_OF_WORK, useExisting: PrismaUnitOfWork },
     { provide: FLIGHT_WRITE_LOCK, useClass: PrismaFlightWriteLock },
     { provide: FLIGHT_EVENT_LOG, useClass: PrismaFlightEventLog },
+    { provide: FLIGHT_EVENT_QUERY, useClass: PrismaFlightEventQuery },
     { provide: FLIGHT_STATS_READER, useClass: PrismaFlightStatsReader },
     {
       provide: FLIGHT_WRITE_CONTEXT,
@@ -66,6 +69,7 @@ function buildFlightWriteContext(
     UNIT_OF_WORK,
     FLIGHT_WRITE_LOCK,
     FLIGHT_EVENT_LOG,
+    FLIGHT_EVENT_QUERY,
     FLIGHT_STATS_READER,
     FLIGHT_WRITE_CONTEXT,
   ],

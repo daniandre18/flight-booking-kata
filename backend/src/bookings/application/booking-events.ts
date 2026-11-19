@@ -1,10 +1,11 @@
 import { formatSeatCode } from '@kata/shared';
-import { isDelayed, type FlightView } from '../../flights';
-import type {
-  DomainEvent,
-  FlightUpdated,
-  SeatBooked,
-} from '../../shared-kernel/application/event-publisher';
+import {
+  flightUpdatedDraft,
+  flightUpdatedEvents,
+  type FlightSchedule,
+  type FlightView,
+} from '../../flights';
+import type { DomainEvent, SeatBooked } from '../../shared-kernel/application/event-publisher';
 import type {
   FlightEventDraft,
   RecordedFlightEvent,
@@ -25,14 +26,12 @@ export interface BookingChange {
 }
 
 /** Estado anunciado cuando la reserva agota el vuelo (research.md §14). */
-function soldOutState(flight: FlightView) {
+function soldOutSchedule(flight: FlightView): FlightSchedule {
   return {
-    status: 'SOLD_OUT' as const,
+    status: 'SOLD_OUT',
     scheduledDepartureAt: flight.scheduledDepartureAt,
     departureAt: flight.departureAt,
     arrivalAt: flight.arrivalAt,
-    delayed: isDelayed(flight.scheduledDepartureAt, flight.departureAt),
-    change: 'SOLD_OUT' as const,
   };
 }
 
@@ -51,14 +50,10 @@ export function bookingDrafts(change: BookingChange): FlightEventDraft[] {
   if (!change.soldOut) {
     return seatDrafts;
   }
-  const state = soldOutState(change.flight);
-  const payload = {
-    ...state,
-    scheduledDepartureAt: state.scheduledDepartureAt.toISOString(),
-    departureAt: state.departureAt.toISOString(),
-    arrivalAt: state.arrivalAt.toISOString(),
-  };
-  return [...seatDrafts, { type: 'FLIGHT_UPDATED', seatCode: null, payload, occurredAt }];
+  return [
+    ...seatDrafts,
+    flightUpdatedDraft(soldOutSchedule(change.flight), 'SOLD_OUT', occurredAt),
+  ];
 }
 
 /** Eventos a publicar tras el commit: asientos, AGOTADO si aplica y el resumen de búsqueda. */
@@ -74,15 +69,7 @@ export function bookingEvents(
     occurredAt: event.occurredAt,
     seatCode: event.seatCode,
   }));
-  const flightEvents = recorded
-    .filter((event) => event.type === 'FLIGHT_UPDATED')
-    .map((event): FlightUpdated => ({
-      type: 'FlightUpdated',
-      flightId: event.flightId,
-      seq: event.seq,
-      occurredAt: event.occurredAt,
-      ...soldOutState(change.flight),
-    }));
+  const flightEvents = flightUpdatedEvents(recorded, soldOutSchedule(change.flight), 'SOLD_OUT');
   const stats = statsChangedEvent(
     summary,
     change.occurredAt,

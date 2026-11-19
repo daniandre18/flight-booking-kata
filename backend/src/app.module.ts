@@ -3,6 +3,7 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { AdminModule } from './admin/admin.module';
 import { BookingsModule } from './bookings';
 import { FlightsModule } from './flights';
 import { HealthModule } from './health/health.module';
@@ -30,6 +31,7 @@ import { AppLoggerModule } from './shared-kernel/infrastructure/logger.module';
     FlightsModule,
     SeatsModule,
     BookingsModule,
+    AdminModule,
     HealthModule,
   ],
   providers: [

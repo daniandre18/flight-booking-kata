@@ -1,0 +1,92 @@
+<h2>Administración de vuelos</h2>
+<form class="card" (submit)="submit($event)" novalidate aria-label="Cambiar estado del vuelo">
+  <div class="field">
+    <label for="admin-key">Clave de administrador</label>
+    <input
+      id="admin-key"
+      type="password"
+      autocomplete="off"
+      [value]="adminKey()"
+      (input)="setKey($event)"
+      aria-describedby="admin-key-hint"
+    />
+    <span class="field-hint" id="admin-key-hint"
+      >Se guarda solo en esta pestaña mientras esté abierta.</span
+    >
+  </div>
+  <div class="field">
+    <label for="admin-flight">Id del vuelo</label>
+    <input
+      id="admin-flight"
+      autocomplete="off"
+      [value]="flightId()"
+      (input)="flightId.set(value($event))"
+      (change)="loadFlight()"
+      aria-describedby="admin-flight-hint"
+    />
+    <span class="field-hint" id="admin-flight-hint">
+      Lo encuentras en la URL del mapa o del tablero (<code>/flights/&lt;id&gt;/…</code>).
+    </span>
+  </div>
+  @if (current(); as f) {
+    <p class="notice notice-info" role="status">
+      {{ f.flightNumber }} · {{ f.origin }} → {{ f.destination }} · {{ date(f.departureAt) }}
+      {{ time(f.departureAt) }} · {{ statusLabel[f.status] }} ·
+      <a [routerLink]="['/flights', f.id, 'dashboard']">Ver tablero</a>
+    </p>
+  }
+  <fieldset>
+    <legend>Acción</legend>
+    <div class="actions">
+      <label
+        ><input
+          type="radio"
+          name="action"
+          value="DELAYED"
+          [checked]="action() === 'DELAYED'"
+          (change)="action.set('DELAYED')"
+        />
+        Retrasar</label
+      >
+      <label
+        ><input
+          type="radio"
+          name="action"
+          value="CANCELLED"
+          [checked]="action() === 'CANCELLED'"
+          (change)="action.set('CANCELLED')"
+        />
+        Cancelar</label
+      >
+    </div>
+  </fieldset>
+  @if (action() === 'DELAYED') {
+    <div class="field">
+      <label for="admin-departure">Nueva hora de salida (hora de Bogotá)</label>
+      <input
+        id="admin-departure"
+        type="datetime-local"
+        [value]="newDeparture()"
+        (input)="newDeparture.set(value($event))"
+      />
+    </div>
+  } @else {
+    <p class="notice notice-warning">
+      Cancelar libera todos los asientos bloqueados y no se puede deshacer.
+    </p>
+  }
+  @if (error(); as message) {
+    <p class="notice notice-danger" role="alert">{{ message }}</p>
+  }
+  @if (success(); as message) {
+    <p class="notice notice-success" role="status">{{ message }}</p>
+  }
+  <button
+    class="btn"
+    [class.btn-danger]="action() === 'CANCELLED'"
+    type="submit"
+    [disabled]="busy()"
+  >
+    {{ busy() ? 'Guardando…' : action() === 'DELAYED' ? 'Retrasar vuelo' : 'Cancelar vuelo' }}
+  </button>
+</form>

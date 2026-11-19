@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, RequestMethod } from '@nestjs/common';
 import { ClientIdSchema } from '@kata/shared';
 import { LoggerModule } from 'nestjs-pino';
 import type { IncomingMessage } from 'node:http';
@@ -39,7 +39,12 @@ export function buildPinoHttpOptions(config: AppConfig): Options {
   imports: [
     LoggerModule.forRootAsync({
       inject: [APP_CONFIG],
-      useFactory: (config: AppConfig) => ({ pinoHttp: buildPinoHttpOptions(config) }),
+      useFactory: (config: AppConfig) => ({
+        pinoHttp: buildPinoHttpOptions(config),
+        // Comodín con nombre (path-to-regexp 8 / Express 5): el `*` por defecto de nestjs-pino
+        // dispara el aviso LegacyRouteConverter al combinarse con el prefijo `/api`.
+        forRoutes: [{ path: '{*splat}', method: RequestMethod.ALL }],
+      }),
     }),
   ],
   exports: [LoggerModule],

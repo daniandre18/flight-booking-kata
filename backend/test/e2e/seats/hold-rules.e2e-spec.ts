@@ -130,6 +130,24 @@ describe('Reglas de bloqueo (HU2)', () => {
     });
   });
 
+  it('GET /api/clients/me/holds?flightId= filtra por vuelo y valida el uuid', async () => {
+    const first = await ctx.createFlight();
+    const second = await ctx.createFlight({ destination: 'CLO' });
+    const clientId = randomUUID();
+    await hold(first, '1A', clientId).expect(201);
+    await hold(second, '2B', clientId).expect(201);
+    const mine = (query: string) =>
+      request(server()).get(`/api/clients/me/holds${query}`).set('X-Client-Id', clientId);
+    const filtered = await mine(`?flightId=${second}`).expect(200);
+    expect(filtered.body.holds).toEqual([
+      expect.objectContaining({ flightId: second, seatIds: ['2B'] }),
+    ]);
+    const all = await mine('').expect(200);
+    expect(all.body.holds).toHaveLength(2);
+    const invalid = await mine('?flightId=no-es-uuid').expect(422);
+    expect(invalid.body.code).toBe('VALIDATION_ERROR');
+  });
+
   it('el snapshot trae una seq coherente con los asientos y nunca expone el clientId', async () => {
     const flightId = await ctx.createFlight();
     const clientId = randomUUID();

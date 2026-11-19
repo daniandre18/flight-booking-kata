@@ -65,8 +65,9 @@ export class ApiService {
     return firstValueFrom(this.http.delete<void>(`/api/flights/${flightId}/seats/${seatId}/hold`));
   }
 
-  getMyHolds(): Promise<MyHoldsResponse> {
-    return firstValueFrom(this.http.get<MyHoldsResponse>('/api/clients/me/holds'));
+  getMyHolds(flightId?: string): Promise<MyHoldsResponse> {
+    const params: Record<string, string> = flightId === undefined ? {} : { flightId };
+    return firstValueFrom(this.http.get<MyHoldsResponse>('/api/clients/me/holds', { params }));
   }
 
   createBooking(request: CreateBookingRequest, idempotencyKey: string): Promise<BookingDto> {
@@ -93,6 +94,7 @@ export class ApiService {
     return firstValueFrom(
       this.http.patch<FlightDto>(`/api/admin/flights/${flightId}/status`, request, {
         headers: new HttpHeaders({ 'X-Admin-Key': adminKey }),
+        context: contextFor({ silent: true }),
       }),
     );
   }

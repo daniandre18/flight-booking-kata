@@ -8,6 +8,7 @@ import type {
   FlightEventLog,
   RecordedFlightEvent,
 } from '../../src/shared-kernel/application/flight-event-log.port';
+import type { FlightEventQueryPort } from '../../src/shared-kernel/application/flight-event-query.port';
 import type {
   FlightStatsReader,
   FlightSummary,
@@ -182,4 +183,16 @@ export function buildFlightWriteContext(clock = new FakeClock()): FlightWriteDou
   const publisher = new RecordingEventPublisher();
   const context = { uow, writeLock, eventLog, statsReader, publisher, clock };
   return { context, uow, writeLock, eventLog, statsReader, publisher, clock };
+}
+
+/** Lectura del registro en memoria: los más recientes primero. */
+export class InMemoryFlightEventQuery implements FlightEventQueryPort {
+  readonly events: RecordedFlightEvent[] = [];
+
+  recent(flightId: string, limit: number): Promise<RecordedFlightEvent[]> {
+    const matches = this.events
+      .filter((event) => event.flightId === flightId)
+      .toSorted((a, b) => b.seq - a.seq);
+    return Promise.resolve(matches.slice(0, limit));
+  }
 }

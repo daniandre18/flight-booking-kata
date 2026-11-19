@@ -1,7 +1,8 @@
-import { Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { Controller, Delete, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import {
   FlightParamsSchema,
   FlightSeatParamsSchema,
+  MyHoldsQuerySchema,
   type HoldSeatResponse,
   type MyHoldsResponse,
   type SeatMapSnapshot,
@@ -21,6 +22,7 @@ import {
 
 class FlightParamsDto extends createZodDto(FlightParamsSchema) {}
 class FlightSeatParamsDto extends createZodDto(FlightSeatParamsSchema) {}
+class MyHoldsQueryDto extends createZodDto(MyHoldsQuerySchema) {}
 
 /** Traduce HTTP ↔ casos de uso; sin lógica de negocio (S de SOLID). */
 @Controller()
@@ -63,7 +65,10 @@ export class SeatsController {
   }
 
   @Get('clients/me/holds')
-  async myHolds(@ClientId() clientId: string): Promise<MyHoldsResponse> {
-    return toMyHoldsResponse(await this.getMyHolds.execute(clientId));
+  async myHolds(
+    @ClientId() clientId: string,
+    @Query() query: MyHoldsQueryDto,
+  ): Promise<MyHoldsResponse> {
+    return toMyHoldsResponse(await this.getMyHolds.execute(clientId, query.flightId));
   }
 }

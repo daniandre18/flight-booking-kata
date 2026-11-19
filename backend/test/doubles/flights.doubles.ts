@@ -1,4 +1,11 @@
-import type { FlightQueryPort, FlightSearchCriteria, FlightView } from '../../src/flights';
+import type {
+  FlightQueryPort,
+  FlightReschedule,
+  FlightSearchCriteria,
+  FlightStatusPort,
+  FlightView,
+} from '../../src/flights';
+import type { StubFlightWriteLock, Transactional } from './shared-kernel.doubles';
 
 export function sampleFlightView(overrides: Partial<FlightView> = {}): FlightView {
   const departureAt = new Date('2026-11-19T15:00:00.000Z');
@@ -44,5 +51,58 @@ export class InMemoryFlightQuery implements FlightQueryPort {
     );
     // Orden inverso a propósito: el caso de uso no debe depender del orden del adaptador.
     return Promise.resolve(matches.toReversed());
+  }
+}
+
+/**
+ * Estado del vuelo en memoria sobre la misma vista que `InMemoryFlightQuery` (y el lock simulado),
+ * con las mismas condiciones atómicas que el adaptador Prisma. Participa en el rollback.
+ */
+export class InMemoryFlightStatus implements FlightStatusPort, Transactional {
+  constructor(
+    private readonly query: InMemoryFlightQuery,
+    private readonly lock?: StubFlightWriteLock,
+  ) {}
+
+  markSoldOutIfFull(): Promise<boolean> {
+    return Promise.resolve(false);
+  }
+
+  delay(flightId: string, schedule: FlightReschedule): Promise<boolean> {
+    const flight = this.query.flights.get(flightId);
+    if (flight === undefined || flight.status === 'CANCELLED') {
+      return Promise.resolve(false);
+    }
+    const status = flight.status === 'SOLD_OUT' ? 'SOLD_OUT' : 'DELAYED';
+    this.save({ ...flight, ...schedule, status });
+    return Promise.resolve(true);
+  }
+
+  cancel(flightId: string): Promise<boolean> {
+    const flight = this.query.flights.get(flightId);
+    if (flight === undefined || flight.status === 'CANCELLED') {
+      return Promise.resolve(false);
+    }
+    this.save({ ...flight, status: 'CANCELLED' });
+    return Promise.resolve(true);
+  }
+
+  snapshot(): unknown {
+    return new Map(this.query.flights);
+  }
+
+  restore(state: unknown): void {
+    this.query.flights.clear();
+    (state as Map<string, FlightView>).forEach((view, id) => this.query.flights.set(id, view));
+    this.query.flights.forEach((view) => this.syncLock(view));
+  }
+
+  private save(view: FlightView): void {
+    this.query.flights.set(view.id, view);
+    this.syncLock(view);
+  }
+
+  private syncLock(view: FlightView): void {
+    this.lock?.setFlight(view.id, { status: view.status, departureAt: view.departureAt });
   }
 }

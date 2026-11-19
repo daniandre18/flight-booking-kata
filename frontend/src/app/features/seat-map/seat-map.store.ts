@@ -134,7 +134,7 @@ export class SeatMapStore {
   }
 
   private async loadMyHolds(): Promise<void> {
-    const holds = await this.api.getMyHolds();
+    const holds = await this.api.getMyHolds(this.flightId);
     this.holderTag.set(holds.holderTag);
     this.offsetMs.set(new Date(holds.serverNow).getTime() - Date.now());
     this.expiredLocally.set(false);

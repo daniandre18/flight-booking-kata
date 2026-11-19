@@ -39,6 +39,10 @@ export const formatDate = (iso: string): string => DATE.format(new Date(iso));
 export const formatClock = (iso: string): string => TIME_WITH_SECONDS.format(new Date(iso));
 export const formatMoney = (amount: number): string => MONEY.format(amount);
 
+const PERCENT = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 1 });
+/** `1,1 %` (separador decimal y espacio del español). */
+export const formatPercent = (value: number): string => `${PERCENT.format(value)} %`;
+
 export function formatDuration(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;

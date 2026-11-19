@@ -75,6 +75,19 @@ describe('consultas de asientos', () => {
         { flightId: FLIGHT, seatIds: ['12C', '12D'], holdExpiresAt: expiresAt.toISOString() },
       ]);
     });
+
+    it('con flightId devuelve solo los bloqueos de ese vuelo', async () => {
+      const other = '9d1f3a2b-6c4e-4a8f-b2d1-7e5c3f9a1b20';
+      seats.addFlight(other);
+      const expiresAt = new Date(clock.now().getTime() + 60_000);
+      seats.forceHold(FLIGHT, '12C', CLIENT, expiresAt);
+      seats.forceHold(other, '3A', CLIENT, expiresAt);
+      const useCase = new GetMyHoldsUseCase(seats, clock);
+      const filtered = await useCase.execute(CLIENT, other);
+      expect(filtered.holds.map((group) => group.flightId)).toEqual([other]);
+      const all = await useCase.execute(CLIENT);
+      expect(all.holds.map((group) => group.flightId).sort()).toEqual([FLIGHT, other].sort());
+    });
   });
 
   it('toHoldSeatResponse cumple el contrato', () => {

@@ -185,4 +185,13 @@ export class StubFlightStatusPort implements FlightStatusPort {
     this.calls.push(flightId);
     return Promise.resolve(this.soldOut);
   }
+
+  /** Bookings nunca retrasa ni cancela: si se llamara, la prueba debe fallar. */
+  delay(): Promise<boolean> {
+    return Promise.reject(new Error('delay no se usa en bookings'));
+  }
+
+  cancel(): Promise<boolean> {
+    return Promise.reject(new Error('cancel no se usa en bookings'));
+  }
 }

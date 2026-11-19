@@ -155,3 +155,30 @@ curl -s -X PATCH -H "X-Admin-Key: incorrecta" -H 'Content-Type: application/json
 ```
 
 (`date -v+1d` es la sintaxis de macOS; en Linux usa `date -d tomorrow +%F`.)
+
+## Última validación completa (2026-11-19, fase 10, T181)
+
+- `docker compose up --build` desde cero, con volumen nuevo: build y arranque en 33 s (29 s en la corrida final);
+  migraciones `0001` y `0002`, seed (420 vuelos, 75.600 asientos, 45 reservas) y
+  `GET /health` → `{"status":"ok","db":"up"}` 3 s después.
+- **Prueba rápida por la API** (a través de nginx): las historias 1 a 4 respondieron como dice
+  esta guía, incluido `402` con la tarjeta de rechazo, `201` y luego `200` con
+  `Idempotent-Replayed: true` y el mismo código, el mismo `404` en la consulta con otro correo, y
+  `401` con una clave de admin incorrecta.
+- **Interfaz** (Chrome): búsqueda con el vuelo retrasado y su nueva hora; un bloqueo de otro
+  cliente visible en el mapa sin recargar; pago y boleto (VISA terminada en 1111); el tablero
+  sumando 180 con registro en vivo; `/admin` rechazando una clave incorrecta y cancelando con la
+  correcta; la búsqueda abierta mostrando CANCELADO y AGOTADO sin recargar.
+- **Casos borde**: un bloqueo vigente sobrevive a `docker compose restart api`, y uno que vence
+  con la api caída se libera en la pasada de arranque (evento `SEAT_RELEASED` con `EXPIRED`).
+- **Tiempos**: ver README § Tiempos medidos. Para repetirlos:
+  `node scripts/measure-realtime.mjs <flightId>`; con `HOLD_TTL_SECONDS=5`, agrega `expiry`.
+- **Dos pestañas automatizadas (T179)**: con el stack levantado, `pnpm test:e2e:ui` abre dos
+  contextos de Chrome y comprueba la propagación en menos de 1 s y que en un clic simultáneo gana
+  una sola pestaña.
+
+Desviaciones encontradas respecto de esta guía: ninguna en los pasos. Notas:
+
+- "Mañana" se calcula con la fecha local. `date -v+1d` coincide con la fecha de Bogotá salvo
+  entre las 19:00 y la medianoche de Bogotá en equipos configurados en UTC.
+- La reconexión del navegador espera además el reintento de Socket.io (1 s ± 50 %).

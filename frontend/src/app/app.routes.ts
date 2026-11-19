@@ -28,5 +28,15 @@ export const routes: Routes = [
     title: 'Consultar boleto',
     loadComponent: () => import('./features/booking/booking.page').then((m) => m.BookingPage),
   },
+  {
+    path: 'flights/:id/dashboard',
+    title: 'Tablero del vuelo',
+    loadComponent: () => import('./features/dashboard/dashboard.page').then((m) => m.DashboardPage),
+  },
+  {
+    path: 'admin',
+    title: 'Administración',
+    loadComponent: () => import('./features/admin/admin.page').then((m) => m.AdminPage),
+  },
   { path: '**', redirectTo: 'search' },
 ];

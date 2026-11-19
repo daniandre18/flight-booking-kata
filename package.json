@@ -16,10 +16,12 @@
     "typecheck": "pnpm build:shared && pnpm -r typecheck",
     "seed": "pnpm build:shared && pnpm --filter backend seed",
     "format:check": "prettier --check .",
-    "test:cov": "pnpm build:shared && pnpm -r test:cov"
+    "test:cov": "pnpm build:shared && pnpm -r test:cov",
+    "test:e2e:ui": "playwright test --config e2e/playwright.config.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.65.1",
     "eslint": "^10.15.0",
     "globals": "^17.0.0",
     "prettier": "^3.10.1",

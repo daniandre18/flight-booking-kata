@@ -18,3 +18,7 @@ backend/src/generated/
 .DS_Store
 Thumbs.db
 .idea/
+
+# Playwright (T179)
+test-results/
+playwright-report/

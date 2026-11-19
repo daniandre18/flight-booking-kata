@@ -1,4 +1,5 @@
-import type { FlightDto } from '@kata/shared';
+import type { ActivityEntryDto, FlightDto } from '@kata/shared';
+import type { ActivityEntry } from './get-flight-events.use-case';
 import { durationMinutes, isDelayed } from '../domain/flight';
 import type { FlightView } from './ports/flight-query.port';
 
@@ -20,4 +21,8 @@ export function toFlightDto(view: FlightView): FlightDto {
     availableSeats: view.availableSeats,
     capacity: view.capacity,
   };
+}
+
+export function toActivityEntryDto(entry: ActivityEntry): ActivityEntryDto {
+  return { ...entry, occurredAt: entry.occurredAt.toISOString() };
 }

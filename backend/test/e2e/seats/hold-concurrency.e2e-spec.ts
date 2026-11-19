@@ -25,6 +25,7 @@ describe('Concurrencia: 100 bloqueos simultáneos del mismo asiento', () => {
     const flightId = await ctx.createFlight();
     const clients = Array.from({ length: PARALLEL }, () => randomUUID());
 
+    const startedAt = performance.now();
     const responses = await Promise.all(
       clients.map((clientId) =>
         request(baseUrl)
@@ -33,7 +34,13 @@ describe('Concurrencia: 100 bloqueos simultáneos del mismo asiento', () => {
       ),
     );
 
+    const elapsedMs = performance.now() - startedAt;
     const statuses = responses.map((response) => response.status);
+    const count = (status: number) => statuses.filter((value) => value === status).length;
+    process.stdout.write(
+      `[medición] ${PARALLEL} bloqueos simultáneos: ${count(201)} × 201, ${count(409)} × 409, ` +
+        `${statuses.filter((status) => status >= 500).length} × 5xx en ${elapsedMs.toFixed(0)} ms\n`,
+    );
     expect(statuses.filter((status) => status === 201)).toHaveLength(1);
     expect(statuses.filter((status) => status === 409)).toHaveLength(PARALLEL - 1);
     expect(statuses.filter((status) => status >= 500)).toHaveLength(0);

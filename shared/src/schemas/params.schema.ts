@@ -7,3 +7,7 @@ export type FlightParams = z.infer<typeof FlightParamsSchema>;
 
 export const FlightSeatParamsSchema = FlightParamsSchema.extend({ seatId: SeatCodeSchema });
 export type FlightSeatParams = z.infer<typeof FlightSeatParamsSchema>;
+
+/** `GET /clients/me/holds?flightId=`: filtro opcional por vuelo. */
+export const MyHoldsQuerySchema = z.object({ flightId: z.uuid().optional() });
+export type MyHoldsQuery = z.infer<typeof MyHoldsQuerySchema>;

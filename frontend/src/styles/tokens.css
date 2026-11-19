@@ -1,35 +1,35 @@
 /*
- * Tokens de diseño (T124, RUX-034). Todos los pares texto/fondo cumplen contraste ≥ 4,5:1
- * (valores estimados, anotados a la derecha) y los bordes de los controles ≥ 3:1 contra el
- * fondo.
+ * Tokens de diseño (T124, T180, RUX-034). Todos los pares texto/fondo cumplen contraste
+ * ≥ 4,5:1 y los bordes de los controles ≥ 3:1. Los valores de la derecha se midieron con la
+ * fórmula de luminancia relativa de WCAG 2.x (revisión de la fase 10).
  */
 :root {
   /* Superficies */
   --color-bg: #f6f7f9;
   --color-surface: #ffffff;
-  --color-border: #767c87; /* 4,4:1 sobre blanco (≥ 3:1 para bordes de controles) */
+  --color-border: #767c87; /* 4,2:1 sobre blanco (≥ 3:1 para bordes de controles) */
 
   /* Texto */
-  --color-text: #1b1f24; /* 16,1:1 sobre blanco */
-  --color-text-muted: #4a515c; /* 8,2:1 sobre blanco */
+  --color-text: #1b1f24; /* 16,6:1 sobre blanco; 15,5:1 sobre el fondo */
+  --color-text-muted: #4a515c; /* 8,0:1 sobre blanco; 7,5:1 sobre el fondo */
 
   /* Marca y foco */
-  --color-primary: #0b57d0; /* 6,3:1 sobre blanco; texto blanco sobre él 6,3:1 */
+  --color-primary: #0b57d0; /* 6,4:1 sobre blanco; texto blanco sobre él 6,4:1 */
   --color-primary-strong: #0842a0;
   --color-on-primary: #ffffff;
-  --color-focus: #b3261e; /* anillo de foco 5,9:1 sobre blanco, distinto del primario */
+  --color-focus: #b3261e; /* anillo de foco 6,5:1 sobre blanco, distinto del primario */
 
   /* Estados del asiento (fondo + texto; además llevan icono o patrón, RUX-006) */
   --seat-available-bg: #e7f5ec;
-  --seat-available-fg: #0f5132; /* 8,4:1 */
+  --seat-available-fg: #0f5132; /* 8,3:1 */
   --seat-mine-bg: #0b57d0;
-  --seat-mine-fg: #ffffff; /* 6,3:1 */
+  --seat-mine-fg: #ffffff; /* 6,4:1 */
   --seat-other-bg: #fff4d6;
-  --seat-other-fg: #6b4400; /* 7,0:1 */
+  --seat-other-fg: #6b4400; /* 7,8:1 (7,0:1 sobre la raya #ffe7a3) */
   --seat-booked-bg: #4a515c;
-  --seat-booked-fg: #ffffff; /* 8,2:1 */
+  --seat-booked-fg: #ffffff; /* 8,0:1 */
   --seat-unavailable-bg: #eceef1;
-  --seat-unavailable-fg: #4a515c; /* 7,1:1 */
+  --seat-unavailable-fg: #4a515c; /* 6,9:1 */
 
   /* Avisos */
   --color-success-bg: #e7f5ec;
@@ -37,9 +37,9 @@
   --color-warning-bg: #fff4d6;
   --color-warning-fg: #6b4400;
   --color-danger-bg: #fde7e6;
-  --color-danger-fg: #8c1d18; /* 7,3:1 sobre su fondo */
+  --color-danger-fg: #8c1d18; /* 7,7:1 sobre su fondo */
   --color-info-bg: #e8f0fe;
-  --color-info-fg: #0842a0; /* 8,0:1 */
+  --color-info-fg: #0842a0; /* 8,0:1 sobre su fondo */
 
   /* Espaciado y forma */
   --space-1: 0.25rem;

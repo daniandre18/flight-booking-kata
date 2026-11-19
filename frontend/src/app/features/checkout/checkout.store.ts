@@ -37,7 +37,7 @@ export class CheckoutStore {
     try {
       const [flight, myHolds] = await Promise.all([
         this.api.getFlight(flightId),
-        this.api.getMyHolds(),
+        this.api.getMyHolds(flightId),
       ]);
       const group = myHolds.holds.find((candidate) => candidate.flightId === flightId);
       this.flight.set(flight);

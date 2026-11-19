@@ -89,3 +89,9 @@ export const UpdateFlightStatusRequestSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal(FlightStatus.CANCELLED) }),
 ]);
 export type UpdateFlightStatusRequest = z.infer<typeof UpdateFlightStatusRequestSchema>;
+
+/** `GET /flights/:id/events?limit=`: registro de actividad (por defecto 50, máximo 100). */
+export const FlightEventsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type FlightEventsQuery = z.infer<typeof FlightEventsQuerySchema>;
