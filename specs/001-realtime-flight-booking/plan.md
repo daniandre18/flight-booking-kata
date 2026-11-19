@@ -71,14 +71,14 @@ compartido.
 | Principio | Estado | Cómo se cumple |
 |-----------|--------|----------------|
 | I. Integridad de reservas | ✅ con excepción justificada | Toda transición de asiento es un `UPDATE` condicional cuyo conteo decide (research §5, §8, §9). `UNIQUE(seat_id)` en `booking_seats` es la última defensa. El cliente pinta lo que confirma el servidor. **Excepción**: el límite de 4 y el reloj compartido leen los bloqueos del propio cliente antes del `UPDATE` (ver Seguimiento de complejidad) |
-| II. Comandos HTTP, eventos WebSocket | ✅ | Comandos REST con códigos claros. El socket no acepta comandos. Los eventos se publican tras el commit con `flightId`, `seatId`, estado, `seq` por vuelo y `occurredAt` ([realtime-events.md](./contracts/realtime-events.md)) |
+| II. Comandos HTTP, eventos WebSocket | ✅ | Comandos REST con códigos claros. El socket no acepta comandos. Los eventos se publican tras el commit con `flightId`, `seatId`, estado, `seq` por vuelo y `occurredAt`. En el room del vuelo cada evento tiene una `seq` consecutiva, sin `flight:stats`. Todos los clientes descartan `seq` ≤ última y, ante un salto, vuelven a pedir el estado por HTTP: el mapa y el tablero el snapshot, la búsqueda `GET /api/flights/:id` (research §13, [realtime-events.md](./contracts/realtime-events.md)) |
 | III. Contratos compartidos | ✅ | DTOs, enums, esquemas zod, códigos de error y eventos solo en `@kata/shared`. El backend valida con ellos (nestjs-zod) y el frontend los importa |
-| IV. Hexagonal modular | ✅ | `domain/` y `application/` sin NestJS, Prisma ni Socket.io. Puertos: `Clock`, `PaymentGateway`, `EventPublisher` y repositorios. Módulos `flights`, `seats`, `bookings`, `realtime`, más `admin` y `health` (research §3) |
+| IV. Hexagonal modular | ✅ | `domain/` y `application/` sin NestJS, Prisma ni Socket.io. Puertos: `Clock`, `PaymentGateway`, `EventPublisher`, `UnitOfWork` y repositorios. Cada módulo escribe solo sus tablas. Las operaciones entre módulos (confirmar, cancelar) las orquesta un caso de uso con `UnitOfWork` sobre los puertos de cada módulo. Las primitivas compartidas (lock del vuelo, escritor de eventos, estadísticas) viven en `shared-kernel/infrastructure/persistence/`. Módulos `flights`, `seats`, `bookings`, `realtime`, más `admin` y `health` (research §3) |
 | V. Pruebas primero en lo crítico | ✅ | Concurrencia (100 → 1), expiración, confirmación con bloqueo vencido, idempotencia y cancelación con bloqueos: e2e contra PostgreSQL real. Reloj inyectado (`FakeClock`) y `:now` como parámetro en SQL |
-| VI. Errores explícitos | ✅ | Formato único `{ code, message, details }` con 400/401/402/404/409/410/422, según la constitución 1.0.1: 401 `ADMIN_UNAUTHORIZED` para la clave de administrador; 422 `HOLD_LIMIT_REACHED` e `IDEMPOTENCY_KEY_REUSED`. El frontend traduce cada `code` al español y revierte la UI optimista |
+| VI. Errores explícitos | ✅ | Formato único `{ code, message, details }` con 400/401/402/404/409/410/422, según la constitución 1.0.1: 401 `ADMIN_UNAUTHORIZED` para la clave de administrador; 409 solo para conflictos de asiento (`SEAT_UNAVAILABLE`, `SEAT_NOT_HELD`); 422 para reglas de negocio (`HOLD_LIMIT_REACHED`, `IDEMPOTENCY_KEY_REUSED`, `FLIGHT_NOT_BOOKABLE`, `FLIGHT_STATUS_CONFLICT`, etc.). El frontend traduce cada `code` al español y revierte la UI optimista |
 | VII. Simplicidad | ✅ | Monolito modular, identidad anónima por `clientId`, pago ficticio y `docker compose up`. Sin colas, caché ni servicios extra |
-| VIII. Calidad | ✅ | `strict`, ESLint + Prettier sin `any`, logs JSON con pino, `GET /api/health` con verificación de la base, seed determinista y Conventional Commits |
-| IX. Documentación | ✅ | `README.md`, `docs/architecture.md` y `docs/ia.md` en la estructura y en las tareas; se actualizan con cada cambio de diseño |
+| VIII. Calidad | ✅ | `strict` (verificado con `pnpm typecheck`), ESLint + Prettier sin `any`, logs JSON con pino, `GET /health` (fuera del prefijo `/api`) con verificación de la base, seed determinista y Conventional Commits |
+| IX. Documentación | ✅ | `README.md`, `docs/architecture.md` y `docs/ia.md` se crean como esqueleto en la fase 1 de tareas. Cada fase los actualiza en su checkpoint con el diseño que introduce, y la fase 10 los completa y revisa |
 
 **Resultado de la puerta (antes de la Fase 0)**: PASA. Queda una desviación justificada
 (principio I), registrada abajo. El 401 dejó de ser desviación con la enmienda 1.0.1 de la
@@ -91,6 +91,20 @@ refinamientos que refuerzan los principios I, II y VI sin crear desviaciones nue
   cancelación y bloqueo y garantiza que `seq` sigue el orden de commit.
 - **`holderTag`** en lugar de difundir el `clientId` (research §15).
 - **`flight_events`** para el registro de actividad (research §13).
+
+**Revisión tras `/speckit-analyze` (2026-11-18)**: PASA. Los hallazgos críticos y altos se
+resolvieron en el diseño, sin cambiar la constitución:
+
+- **IV**: `UnitOfWork` y primitivas en `shared-kernel`; ningún módulo importa la
+  infraestructura de otro.
+- **II**: el room del vuelo no lleva `flight:stats`; la búsqueda vuelve a pedir el vuelo ante
+  un salto.
+- **VI**: los conflictos de estado del vuelo responden 422.
+- **VIII**: `GET /health`.
+- **IX**: esqueletos de documentación desde la fase 1.
+
+También se dimensionaron las transacciones de Prisma, el snapshot se lee en `REPEATABLE READ`,
+`flight_events.seat_code` pasó a `varchar(3)` y se citaron los campos que faltaban.
 
 ## Estructura del proyecto
 
@@ -113,7 +127,7 @@ specs/001-realtime-flight-booking/
 ### Código fuente (raíz del repositorio)
 
 ```text
-package.json                 # scripts: dev, test, lint, build, seed
+package.json                 # scripts: dev, test, lint, typecheck, build, seed
 pnpm-workspace.yaml
 docker-compose.yml           # postgres:16, api, web
 .env.example
@@ -132,53 +146,67 @@ shared/                      # @kata/shared
     ├── schemas/             # esquemas zod + tipos inferidos (DTOs y requests)
     ├── errors/              # ErrorCode, ErrorResponse
     ├── realtime/            # ServerToClientEvents, ClientToServerEvents, RealtimeEvents
+    ├── domain/              # utilidades de código de asiento
     └── index.ts
+└── test/                    # pruebas de esquemas
 
 backend/
 ├── prisma/
 │   ├── schema.prisma
 │   ├── migrations/
 │   └── seed.ts
+├── docker/entrypoint.sh
 ├── src/
 │   ├── main.ts
 │   ├── app.module.ts
-│   ├── shared-kernel/       # puertos Clock y EventPublisher, filtro de errores, logger, zod pipe
+│   ├── shared-kernel/
+│   │   ├── domain/          # Clock, DomainError
+│   │   ├── application/     # puertos EventPublisher y UnitOfWork
+│   │   └── infrastructure/
+│   │       ├── http/        # filtro de errores, zod, @ClientId()
+│   │       ├── persistence/ # PrismaService, PrismaUnitOfWork (AsyncLocalStorage), flight-write-lock, flight-events.writer, flight-stats.query
+│   │       └── ...          # logger, config, SystemClock
 │   ├── flights/
 │   │   ├── domain/          # Flight, reglas de transición, retraso
 │   │   ├── application/     # SearchFlights, GetFlight, GetFlightStats, GetFlightEvents; puertos
-│   │   └── infrastructure/  # PrismaFlightRepository, FlightsController
+│   │   └── infrastructure/  # PrismaFlightRepository (solo tabla flights), FlightsController
 │   ├── seats/
 │   │   ├── domain/          # reglas de bloqueo: límite, reloj compartido, vista perezosa
 │   │   ├── application/     # HoldSeat, ReleaseSeat, GetSeatMap, GetMyHolds, ReleaseExpiredHolds
-│   │   └── infrastructure/  # PrismaSeatHoldRepository, SeatsController, HoldSweeperJob
+│   │   └── infrastructure/  # PrismaSeatHoldRepository (solo tabla seats), SeatsController, HoldSweeperJob
 │   ├── bookings/
 │   │   ├── domain/          # Booking, código de reserva, PaymentGateway (puerto)
 │   │   ├── application/     # CreateBooking, LookupBooking; IdempotencyStore (puerto)
-│   │   └── infrastructure/  # PrismaBookingRepository, FakePaymentGateway, BookingsController
+│   │   └── infrastructure/  # PrismaBookingRepository, PrismaIdempotencyStore, FakePaymentGateway, BookingsController
 │   ├── realtime/
 │   │   ├── application/     # mapeo de eventos de dominio a eventos de shared
 │   │   └── infrastructure/  # RealtimeGateway (namespace /realtime), EventEmitterPublisher
 │   ├── admin/
-│   │   ├── application/     # UpdateFlightStatus (retraso, cancelación)
+│   │   ├── application/     # UpdateFlightStatus (UnitOfWork: FlightRepository + SeatHoldRepository)
 │   │   └── infrastructure/  # AdminController, AdminKeyGuard
 │   └── health/
 │       └── infrastructure/  # HealthController
 └── test/
+    ├── support/             # FakeClock
     ├── unit/                # dominio con FakeClock
     └── e2e/                 # Supertest + PostgreSQL real (concurrencia, expiración, etc.)
 
 frontend/
+├── proxy.conf.json          # desarrollo: :4200 → :3000 (/api, /health, /socket.io con ws)
 └── src/app/
     ├── core/                # ClientIdService, interceptores (client-id, errores), RealtimeService, ErrorMessages
+    │   └── flight-state/    # reductor compartido por mapa y tablero (contadores derivados)
     ├── features/
     │   ├── search/          # formulario y resultados en vivo
-    │   ├── seat-map/        # mapa (grid accesible), leyenda, panel de resumen, reductor de estado
+    │   ├── seat-map/        # mapa (grid accesible), leyenda, panel de resumen, store
     │   ├── checkout/        # formulario de pago con cuenta regresiva
     │   ├── booking/         # boleto y consulta por código + correo
     │   ├── dashboard/       # contadores, barra de ocupación, registro de actividad
     │   └── admin/           # retraso y cancelación con clave
     ├── shared/ui/           # badge de conexión, cuenta regresiva, iconos de estado
     └── styles/tokens.css    # tokens de diseño en variables CSS
+
+e2e/                         # (opcional) Playwright: prueba de dos pestañas
 ```
 
 **Decisión de estructura**: aplicación web en monorepo pnpm con tres paquetes (`shared/`,
@@ -193,7 +221,10 @@ negocio con capas hexagonales internas y el frontend por funcionalidad.
 
 ## Riesgos y puntos abiertos
 
-1. **Evento perdido entre commit y publicación** (caída del proceso en ese instante): no hay
+1. **Pool y transacciones de Prisma**: la prueba de concurrencia depende de
+   `maxWait`/`timeout` de 10 s y un pool de 20 conexiones (`DB_POOL_MAX`, research §4). Si cambia la estrategia
+   de lock, hay que revisar estos valores.
+2. **Evento perdido entre commit y publicación** (caída del proceso en ese instante): no hay
    outbox. Los clientes lo corrigen con el snapshot al detectar el hueco de `seq` o al
    reconectar (research §13).
 

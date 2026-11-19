@@ -1,0 +1,28 @@
+{
+  "name": "flight-booking-realtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Prototipo de reservas de vuelos en tiempo real (monorepo pnpm).",
+  "packageManager": "pnpm@10.34.9",
+  "engines": {
+    "node": ">=24.15.0"
+  },
+  "scripts": {
+    "build:shared": "pnpm --filter @kata/shared build",
+    "dev": "pnpm build:shared && pnpm --parallel --filter backend --filter frontend dev",
+    "build": "pnpm -r build",
+    "test": "pnpm build:shared && pnpm -r test",
+    "lint": "eslint .",
+    "typecheck": "pnpm build:shared && pnpm -r typecheck",
+    "seed": "pnpm build:shared && pnpm --filter backend seed",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.15.0",
+    "globals": "^17.0.0",
+    "prettier": "^3.10.1",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.73.0"
+  }
+}

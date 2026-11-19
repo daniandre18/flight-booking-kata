@@ -100,7 +100,7 @@ asiento y comprobar que solo uno lo obtiene.
 3. **Dado** que otro usuario tiene abierto el mismo vuelo, **cuando** bloqueo un asiento,
    **entonces** él lo ve bloqueado en menos de 1 segundo y no puede seleccionarlo.
 4. **Dado** que dos usuarios hacen clic en el mismo asiento al mismo tiempo, **entonces**
-   exactamente uno lo obtiene; el otro recibe el mensaje "asiento ya no disponible" y su mapa
+   exactamente uno lo obtiene; el otro recibe el mensaje "Este asiento ya no está disponible. Elige otro asiento del mapa." y su mapa
    se corrige para mostrar el asiento bloqueado.
 5. **Dado** un asiento que yo bloqueé, **cuando** vuelvo a hacer clic sobre él, **entonces** lo
    libero y todos lo ven DISPONIBLE.
@@ -218,18 +218,18 @@ restaurarla para comprobar la resincronización. Cambiar el estado del vuelo des
 - **RF-001**: El sistema DEBE permitir buscar vuelos por origen, destino y fecha, y devolver
   solo los vuelos de esa ruta con salida en ese día, ordenados por hora de salida ascendente.
 - **RF-002**: Cada resultado DEBE mostrar tarifa, hora de salida, hora de llegada, duración,
-  estado y número de asientos DISPONIBLES.
+  estado y número de asientos DISPONIBLES. Ver RUX-022.
 - **RF-003**: El sistema DEBE rechazar con error de validación una búsqueda con fecha pasada,
-  con origen igual a destino o con campos vacíos.
-- **RF-004**: El sistema DEBE mostrar un estado vacío explicativo cuando no hay resultados.
+  con origen igual a destino o con campos vacíos. Ver RUX-021.
+- **RF-004**: El sistema DEBE mostrar un estado vacío explicativo cuando no hay resultados. Ver RUX-024.
 - **RF-005**: Los resultados abiertos DEBEN actualizarse sin recargar cuando cambie el estado o
-  el número de asientos disponibles de cualquiera de los vuelos listados.
+  el número de asientos disponibles de cualquiera de los vuelos listados. Ver RUX-023.
 
 **Mapa de asientos y bloqueo**
 
 - **RF-006**: El sistema DEBE mostrar un mapa del avión de 30 filas por 6 asientos (A a F),
   identificando ventana (A, F), medio (B, E) y pasillo (C, D), con el estado de cada asiento y
-  distinguiendo los asientos bloqueados por el propio cliente.
+  distinguiendo los asientos bloqueados por el propio cliente. Ver RUX-001 a RUX-004.
 - **RF-007**: El sistema DEBE garantizar que un asiento nunca esté bloqueado ni reservado por
   más de un cliente, incluso ante solicitudes simultáneas.
 - **RF-008**: Al bloquear un asiento, el sistema DEBE asignarlo al cliente con un vencimiento
@@ -237,7 +237,7 @@ restaurarla para comprobar la resincronización. Cambiar el estado del vuelo des
   es el momento del bloqueo más la duración configurada (10 minutos por defecto); si ya los
   tiene, el nuevo asiento hereda el vencimiento existente, que no se extiende.
 - **RF-009**: El sistema DEBE rechazar un bloqueo sobre un asiento no DISPONIBLE con el mensaje
-  "asiento ya no disponible" y corregir el mapa del cliente.
+  "Este asiento ya no está disponible. Elige otro asiento del mapa." (texto de RUX-036) y corregir el mapa del cliente.
 - **RF-010**: El sistema DEBE limitar a 4 los asientos bloqueados simultáneamente por un
   cliente en un mismo vuelo.
 - **RF-011**: El cliente DEBE poder liberar un asiento que él bloqueó; nadie más puede
@@ -249,7 +249,7 @@ restaurarla para comprobar la resincronización. Cambiar el estado del vuelo des
 - **RF-014**: El sistema DEBE conservar los bloqueos de un cliente al cerrar o recargar la
   pestaña, y permitirle recuperarlos con su tiempo restante al volver.
 - **RF-015**: Cada cambio de estado de un asiento DEBE ser visible para todos los usuarios que
-  miran ese vuelo en menos de 1 segundo.
+  miran ese vuelo en menos de 1 segundo. Ver RUX-016 y CE-010.
 
 **Confirmación y boleto**
 
@@ -296,11 +296,11 @@ restaurarla para comprobar la resincronización. Cambiar el estado del vuelo des
 - **RF-030**: Ante eventos desordenados o duplicados, la pantalla DEBE reflejar siempre el
   estado más reciente.
 - **RF-031**: Ante una pérdida de conexión, la pantalla DEBE indicar "reconectando" y, al
-  restablecerse, resincronizarse con el estado real.
+  restablecerse, resincronizarse con el estado real. Ver RUX-018 a RUX-020.
 - **RF-032**: Tras un reinicio del servidor, el sistema DEBE conservar los bloqueos vigentes y
   liberar y notificar los vencidos.
 - **RF-033**: Ante cualquier acción rechazada, la pantalla DEBE mostrar un mensaje entendible y
-  volver al último estado confirmado.
+  volver al último estado confirmado. Ver RUX-035 y RUX-036.
 
 **Datos de prueba y operación**
 
@@ -332,7 +332,7 @@ los requisitos funcionales anteriores, que siguen vigentes.
 ### 1. Mapa de asientos con forma de cabina
 
 - **RUX-001**: El mapa DEBE dibujarse con forma de cabina: filas 1 a 30 en orden de adelante
-  hacia atrás, con el número de fila visible a ambos lados.
+  hacia atrás, con el número de fila visible a ambos lados. Detalla RF-006.
 - **RUX-002**: Los asientos A-B-C y D-E-F DEBEN aparecer separados por un pasillo visible.
 - **RUX-003**: El mapa DEBE identificar el tipo de cada asiento: ventana (A y F), medio (B y E)
   y pasillo (C y D).
@@ -421,25 +421,25 @@ los requisitos funcionales anteriores, que siguen vigentes.
 ### 5. Cambios de otros usuarios
 
 - **RUX-016**: Cuando otro usuario bloquea, libera o reserva un asiento, ese asiento DEBE
-  resaltarse brevemente para que el cambio se note, sin mover la vista, quitar el foco ni
-  interrumpir lo que estoy haciendo.
+  resaltarse durante unos 600 ms para que el cambio se note, sin mover la vista, quitar el foco ni
+  interrumpir lo que estoy haciendo. Detalla RF-015.
 - **RUX-017**: Si intento tomar un asiento que otro usuario acaba de ganar, DEBO ver un mensaje
   claro y el mapa DEBE corregirse solo para mostrar el estado real del asiento.
 
 **Criterios de aceptación**:
 
 1. **Dado** que miro un vuelo, **cuando** otro usuario bloquea, libera o reserva un asiento,
-   **entonces** ese asiento se resalta un instante y cambia a su nuevo estado.
+   **entonces** ese asiento se resalta durante unos 600 ms y cambia a su nuevo estado.
 2. **Dado** que estoy escribiendo datos o navegando el mapa, **cuando** llega un cambio de otro
    usuario, **entonces** no pierdo lo que escribía, el foco ni mi posición en el mapa.
 3. **Dado** que otro usuario acaba de ganar un asiento que mi pantalla aún muestra disponible,
-   **cuando** hago clic en él, **entonces** veo el mensaje "asiento ya no disponible" y el
+   **cuando** hago clic en él, **entonces** veo el mensaje "Este asiento ya no está disponible. Elige otro asiento del mapa." y el
    asiento pasa a mostrarse como bloqueado por otro usuario sin que yo recargue.
 
 ### 6. Estado de la conexión en tiempo real
 
 - **RUX-018**: Las pantallas de resultados, mapa, pago y tablero DEBEN mostrar un indicador
-  visible del estado de la conexión en tiempo real: "conectado" o "reconectando".
+  visible del estado de la conexión en tiempo real: "conectado" o "reconectando". Detalla RF-031 (con RUX-019 y RUX-020).
 - **RUX-019**: Mientras la conexión se está restableciendo, el mapa NO DEBE permitir
   seleccionar ni liberar asientos y DEBE explicar por qué (por ejemplo, "Reconectando: espera
   un momento para elegir asientos").
@@ -462,15 +462,15 @@ los requisitos funcionales anteriores, que siguen vigentes.
 
 - **RUX-021**: El formulario de búsqueda DEBE pedir origen, destino y fecha; NO DEBE permitir
   elegir el mismo aeropuerto como origen y destino ni una fecha pasada, y DEBE mostrar junto al
-  campo afectado el motivo del error.
+  campo afectado el motivo del error. Detalla RF-003.
 - **RUX-022**: Cada resultado DEBE mostrar hora de salida, hora de llegada, duración, tarifa,
-  estado y asientos disponibles, con el estado diferenciado por texto y no solo por color.
+  estado y asientos disponibles, con el estado diferenciado por texto y no solo por color. Detalla RF-002.
 - **RUX-023**: Cuando un vuelo de los resultados pasa a RETRASADO, CANCELADO o AGOTADO, el
   resultado DEBE actualizarse sin recargar y mostrar un aviso del cambio (en un retraso, con la
   nueva hora). Los vuelos CANCELADOS o AGOTADOS NO DEBEN permitir abrir la selección de
-  asientos.
+  asientos. Detalla RF-005.
 - **RUX-024**: Si no hay vuelos, la pantalla DEBE mostrar un estado vacío que explique que no
-  hay vuelos para esa ruta y fecha y sugiera cambiar la búsqueda.
+  hay vuelos para esa ruta y fecha y sugiera cambiar la búsqueda. Detalla RF-004.
 
 **Criterios de aceptación**:
 
@@ -542,7 +542,7 @@ los requisitos funcionales anteriores, que siguen vigentes.
 - **RUX-032**: Cada asiento DEBE anunciarse en un lector de pantalla con su código, su tipo y
   su estado (por ejemplo, "12C, pasillo, disponible"), y los cambios de estado del asiento
   enfocado DEBEN anunciarse.
-- **RUX-033**: En pantallas de celular, el panel de resumen DEBE ubicarse en la parte inferior
+- **RUX-033**: En pantallas de celular (ancho de 640 px o menos), el panel de resumen DEBE ubicarse en la parte inferior
   de la pantalla, siempre visible, sin tapar el asiento enfocado.
 - **RUX-034**: Todo el texto DEBE tener un contraste con su fondo de al menos 4,5:1 (3:1 para
   texto grande), incluido el texto sobre asientos, avisos y botones deshabilitados.
@@ -556,7 +556,7 @@ los requisitos funcionales anteriores, que siguen vigentes.
    Enter o Espacio, **entonces** el asiento se bloquea o se libera.
 3. **Dado** un lector de pantalla activo, **cuando** enfoco un asiento, **entonces** escucho su
    código, tipo y estado.
-4. **Dado** una pantalla de celular, **cuando** abro el mapa, **entonces** el panel de resumen
+4. **Dado** una pantalla de 640 px de ancho o menos, **cuando** abro el mapa, **entonces** el panel de resumen
    está en la parte inferior y sigue visible al desplazarme.
 5. **Dado** cualquier pantalla del flujo, **cuando** se mide el contraste de sus textos,
    **entonces** todos cumplen el mínimo de RUX-034.
@@ -564,7 +564,7 @@ los requisitos funcionales anteriores, que siguen vigentes.
 ### 11. Mensajes
 
 - **RUX-035**: Todos los mensajes de éxito y de error DEBEN estar en español claro, sin
-  códigos técnicos, identificadores internos ni jerga.
+  códigos técnicos, identificadores internos ni jerga. Detalla RF-033 (con RUX-036).
 - **RUX-036**: Cada mensaje de error DEBE decir qué pasó y qué puede hacer el usuario (por
   ejemplo, "Este asiento ya no está disponible. Elige otro asiento del mapa.").
 
@@ -583,9 +583,9 @@ los requisitos funcionales anteriores, que siguen vigentes.
 ### Resultados medibles
 
 - **CE-001**: 0 sobre-reservas en una prueba de 100 solicitudes simultáneas sobre el mismo
-  asiento: exactamente 1 obtiene el asiento y 99 reciben "asiento ya no disponible".
+  asiento: exactamente 1 obtiene el asiento y 99 reciben el conflicto de asiento, que se muestra como "Este asiento ya no está disponible. Elige otro asiento del mapa."
 - **CE-002**: Un cambio de asiento o de vuelo hecho en una pestaña se ve en otra pestaña en
-  menos de 1 segundo.
+  menos de 1 segundo. Ver también CE-010, su caso concreto en el mapa.
 - **CE-003**: Un bloqueo vencido se libera y se notifica a todos en máximo 5 segundos tras su
   vencimiento.
 - **CE-004**: El proyecto completo se levanta con un solo comando, sin pasos manuales
@@ -600,7 +600,7 @@ los requisitos funcionales anteriores, que siguen vigentes.
 - **CE-009**: Un usuario nuevo bloquea un asiento en máximo 3 clics desde los resultados de
   búsqueda.
 - **CE-010**: Un bloqueo, liberación o reserva hecho por otro usuario se ve en el mapa en menos
-  de 1 segundo.
+  de 1 segundo. Caso concreto de CE-002 en el mapa.
 
 ## Supuestos
 

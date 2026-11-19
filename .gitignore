@@ -1,0 +1,20 @@
+# Dependencias y salidas
+node_modules/
+dist/
+build/
+coverage/
+.angular/
+backend/src/generated/
+
+# Entorno
+.env
+.env.*
+!.env.example
+
+# Varios
+*.log
+*.tmp
+*.swp
+.DS_Store
+Thumbs.db
+.idea/

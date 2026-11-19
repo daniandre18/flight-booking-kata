@@ -1,0 +1,140 @@
+// Esquema de persistencia (data-model.md). Cada tabla la escribe un solo módulo:
+// flights → flights; seats → seats; bookings, booking_seats, idempotency_keys → bookings;
+// flight_events → primitiva compartida de shared-kernel; airports → solo el seed.
+// Restricciones que Prisma no expresa (CHECK, índices parciales) viven en la migración SQL.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "cjs"
+  importFileExtension = ""
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum FlightStatus {
+  SCHEDULED
+  DELAYED
+  CANCELLED
+  SOLD_OUT
+}
+
+enum SeatStatus {
+  AVAILABLE
+  HELD
+  BOOKED
+}
+
+enum FlightEventType {
+  SEAT_HELD
+  SEAT_RELEASED
+  SEAT_BOOKED
+  FLIGHT_UPDATED
+}
+
+model Airport {
+  code               String   @id @db.Char(3)
+  city               String
+  departingFlights   Flight[] @relation("FlightOrigin")
+  arrivingFlights    Flight[] @relation("FlightDestination")
+
+  @@map("airports")
+}
+
+model Flight {
+  id                   String        @id @db.Uuid
+  flightNumber         String        @map("flight_number")
+  origin               String        @db.Char(3)
+  destination          String        @db.Char(3)
+  scheduledDepartureAt DateTime      @map("scheduled_departure_at") @db.Timestamptz(3)
+  departureAt          DateTime      @map("departure_at") @db.Timestamptz(3)
+  arrivalAt            DateTime      @map("arrival_at") @db.Timestamptz(3)
+  fare                 Int
+  status               FlightStatus  @default(SCHEDULED)
+  capacity             Int           @default(180) @db.SmallInt
+  seq                  BigInt        @default(0)
+  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  originAirport        Airport       @relation("FlightOrigin", fields: [origin], references: [code])
+  destinationAirport   Airport       @relation("FlightDestination", fields: [destination], references: [code])
+  seats                Seat[]
+  bookings             Booking[]
+  events               FlightEvent[]
+
+  @@unique([flightNumber, scheduledDepartureAt])
+  @@index([origin, destination, departureAt])
+  @@map("flights")
+}
+
+model Seat {
+  id            String       @id @default(uuid()) @db.Uuid
+  flightId      String       @map("flight_id") @db.Uuid
+  row           Int          @db.SmallInt
+  letter        String       @db.Char(1)
+  status        SeatStatus   @default(AVAILABLE)
+  heldBy        String?      @map("held_by") @db.Uuid
+  holdExpiresAt DateTime?    @map("hold_expires_at") @db.Timestamptz(3)
+  version       Int          @default(0)
+  flight        Flight       @relation(fields: [flightId], references: [id], onDelete: Cascade)
+  bookingSeat   BookingSeat?
+
+  @@unique([flightId, row, letter])
+  @@index([flightId, status])
+  @@map("seats")
+}
+
+model Booking {
+  id              String           @id @default(uuid()) @db.Uuid
+  code            String           @unique @db.Char(6)
+  flightId        String           @map("flight_id") @db.Uuid
+  clientId        String           @map("client_id") @db.Uuid
+  buyerName       String           @map("buyer_name")
+  buyerEmail      String           @map("buyer_email")
+  total           Int
+  cardLast4       String           @map("card_last4") @db.Char(4)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  flight          Flight           @relation(fields: [flightId], references: [id])
+  seats           BookingSeat[]
+  idempotencyKeys IdempotencyKey[]
+
+  @@index([code, buyerEmail])
+  @@map("bookings")
+}
+
+model BookingSeat {
+  bookingId     String  @map("booking_id") @db.Uuid
+  seatId        String  @unique @map("seat_id") @db.Uuid
+  passengerName String  @map("passenger_name")
+  booking       Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  seat          Seat    @relation(fields: [seatId], references: [id])
+
+  @@id([bookingId, seatId])
+  @@map("booking_seats")
+}
+
+model IdempotencyKey {
+  clientId    String   @map("client_id") @db.Uuid
+  key         String   @db.Uuid
+  requestHash String   @map("request_hash") @db.Char(64)
+  bookingId   String?  @map("booking_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  booking     Booking? @relation(fields: [bookingId], references: [id])
+
+  @@id([clientId, key])
+  @@map("idempotency_keys")
+}
+
+model FlightEvent {
+  flightId   String          @map("flight_id") @db.Uuid
+  seq        BigInt
+  type       FlightEventType
+  seatCode   String?         @map("seat_code") @db.VarChar(3)
+  payload    Json
+  occurredAt DateTime        @map("occurred_at") @db.Timestamptz(3)
+  flight     Flight          @relation(fields: [flightId], references: [id], onDelete: Cascade)
+
+  @@id([flightId, seq])
+  @@map("flight_events")
+}

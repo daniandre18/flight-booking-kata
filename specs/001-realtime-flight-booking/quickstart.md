@@ -19,7 +19,8 @@ Plantilla en `.env.example` (raíz). Valores por defecto para la demo:
 
 | Variable | Defecto | Uso |
 |----------|---------|-----|
-| `DATABASE_URL` | `postgresql://kata:kata@postgres:5432/kata` | Conexión de la api |
+| `DATABASE_URL` | `postgresql://kata:kata@localhost:5432/kata` (en compose: host `db`) | Conexión de la api |
+| `DB_POOL_MAX` | `20` | Pool del adaptador pg de Prisma 7 (lo exige la prueba de concurrencia) |
 | `ADMIN_KEY` | `demo-admin-key` | Clave para retrasar o cancelar vuelos (cámbiala fuera de la demo) |
 | `HOLD_TTL_SECONDS` | `600` | Duración del bloqueo compartido |
 | `HOLD_SWEEP_INTERVAL_MS` | `2000` | Intervalo del job de expiración (configurable) |
@@ -37,21 +38,23 @@ Resultado esperado:
 1. `postgres` queda sano (healthcheck).
 2. `api` aplica las migraciones, carga el seed si la base está vacía, ejecuta una pasada del job
    de expiración y escucha en `:3000`.
-3. `web` sirve la aplicación en <http://localhost:8080> y hace de proxy para `/api` y
-   `/socket.io`.
+3. `web` sirve la aplicación en <http://localhost:8080> y hace de proxy para `/api`,
+   `/health` y `/socket.io`.
 
-Verificación: `curl -s localhost:8080/api/health` → `{"status":"ok","db":"up"}`.
+Verificación: `curl -s localhost:8080/health` → `{"status":"ok","db":"up"}`.
 
 ## Desarrollo local
 
 ```bash
+cp .env.example .env
 pnpm install
-docker compose up -d postgres
+docker compose up -d db
+pnpm --filter backend migrate   # migraciones
 pnpm seed          # regenera los datos de prueba (determinista)
 pnpm dev           # api en :3000 y web en :4200 con proxy a la api
 ```
 
-Otros scripts raíz: `pnpm test`, `pnpm lint`, `pnpm build`.
+Otros scripts raíz: `pnpm test`, `pnpm lint`, `pnpm typecheck`, `pnpm build`.
 
 ## Pruebas automatizadas
 
@@ -66,14 +69,14 @@ Las pruebas e2e obligatorias (principio V) deben pasar:
 
 | Prueba | Resultado esperado |
 |--------|--------------------|
-| 100 `POST /hold` en paralelo al mismo asiento (clientes distintos) | Exactamente 1 respuesta `201` y 99 respuestas `409 SEAT_UNAVAILABLE` |
+| 100 `POST /hold` en paralelo al mismo asiento (clientes distintos) | Exactamente 1 respuesta `201` y 99 respuestas `409 SEAT_UNAVAILABLE`, ningún `500` |
 | Reloj compartido | El segundo asiento bloqueado vence a la misma hora que el primero |
 | Límite de bloqueos | El quinto bloqueo del mismo cliente en el vuelo da `422 HOLD_LIMIT_REACHED` |
 | Expiración (reloj falso) | Tras avanzar el reloj, el job libera el asiento y emite `seat:released` con `EXPIRED` |
 | Confirmar con bloqueo vencido | `410 HOLD_EXPIRED` y ninguna reserva creada |
 | Pago rechazado (`4000000000000002`) | `402 PAYMENT_DECLINED`; los asientos siguen bloqueados |
 | Idempotencia | Dos `POST /bookings` con la misma `Idempotency-Key` → una reserva; la segunda respuesta es `200` con el mismo código |
-| Cancelación con bloqueos activos | Bloqueos liberados, `seat:released` con `FLIGHT_CANCELLED`, confirmación posterior `409 FLIGHT_NOT_BOOKABLE` |
+| Cancelación con bloqueos activos | Bloqueos liberados, `seat:released` con `FLIGHT_CANCELLED`, confirmación posterior `422 FLIGHT_NOT_BOOKABLE` |
 | Clave de admin incorrecta | `401 ADMIN_UNAUTHORIZED` |
 | Lookup con correo incorrecto | `404 BOOKING_NOT_FOUND`, mismo mensaje que con código inexistente |
 

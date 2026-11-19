@@ -1,0 +1,11 @@
+node_modules
+dist
+coverage
+.angular
+pnpm-lock.yaml
+backend/src/generated
+backend/prisma/migrations
+.specify
+.claude
+specs
+docs/prompts

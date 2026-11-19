@@ -2,7 +2,9 @@
 
 **Fecha**: 2026-11-18 | **Plan**: [plan.md](./plan.md) | **Spec**: [spec.md](./spec.md)
 
-Fuente de las decisiones: [docs/prompts/plan.md](../../docs/prompts/plan.md). Cada entrada
+Fuente de las decisiones: [docs/prompts/plan.md](../../docs/prompts/plan.md). Las entradas
+marcadas **(revisión analyze)** corrigen los hallazgos críticos y altos de `/speckit-analyze`
+del 2026-11-18. Cada entrada
 sigue el formato Decisión / Razón / Alternativas descartadas. Las marcadas con **(refinamiento)**
 no están en el documento fuente: completan o corrigen un detalle para cumplir la constitución o
 la spec, sin contradecir ninguna decisión del documento.
@@ -46,8 +48,24 @@ interfaces TypeScript sin validación (no protegen la entrada).
 **Decisión**: módulos `flights`, `seats` (bloqueos), `bookings`, `realtime`, `admin` y
 `health`. Cada uno con `domain/` (entidades y reglas puras), `application/` (casos de uso y
 puertos) e `infrastructure/` (Prisma, controladores HTTP, gateway). Puertos principales:
-`Clock`, `PaymentGateway`, `EventPublisher` y un repositorio por agregado (`FlightRepository`,
-`SeatHoldRepository`, `BookingRepository`, `IdempotencyStore`).
+`Clock`, `PaymentGateway`, `EventPublisher`, `UnitOfWork` y un repositorio por agregado
+(`FlightRepository`, `SeatHoldRepository`, `BookingRepository`, `IdempotencyStore`).
+
+**Límites entre módulos (revisión analyze)**: cada módulo escribe solo sus tablas a través de
+su repositorio (`flights` → `flights`; `seats` → `seats`; `bookings` → `bookings`,
+`booking_seats` e `idempotency_keys`). Las operaciones que tocan varios módulos las orquesta un
+caso de uso con el puerto `UnitOfWork`, que abre una transacción; los repositorios se unen a
+ella de forma transparente mediante un contexto `AsyncLocalStorage`:
+
+- `CreateBooking` usa `IdempotencyStore`, `SeatHoldRepository.markBooked`, `BookingRepository`
+  y `FlightRepository.markSoldOutIfFull`.
+- `UpdateFlightStatus` (admin) usa `FlightRepository.cancel` o `delay` y
+  `SeatHoldRepository.releaseAllHeld`.
+
+Las primitivas de persistencia que usan varios módulos no pertenecen a ninguno. Viven en
+`shared-kernel/infrastructure/persistence/`, detrás de puertos de `shared-kernel/application`
+(`FlightWriteLock`, `FlightEventLog`, `FlightStatsReader`): lock de escritura del vuelo con asignación de
+`seq` (§6), escritor de `flight_events` (§13) y consulta de estadísticas.
 
 **Razón**: principio IV. El dominio decide las reglas (límite de 4, duración del bloqueo, reloj
 compartido, transiciones válidas) y se prueba sin infraestructura; las garantías atómicas viven
@@ -58,7 +76,10 @@ en el adaptador de persistencia, que expone operaciones de intención (`tryHold`
 adaptador HTTP con su caso de uso sobre el dominio de `flights`, y `health` es operativo.
 
 **Alternativas descartadas**: capas por tipo técnico (controllers/, services/) en todo el
-backend (mezcla dominios); CQRS con bus de comandos (excesivo para el alcance).
+backend (mezcla dominios); CQRS con bus de comandos (excesivo para el alcance); helpers de
+persistencia en `flights/infrastructure` importados por `seats` y `bookings` (viola el
+principio IV: un módulo solo consume a otro por sus puertos); pasar el cliente transaccional
+de Prisma como parámetro de los puertos (filtra Prisma a la capa de aplicación).
 
 ## 4. Persistencia: PostgreSQL + Prisma
 
@@ -70,6 +91,17 @@ parametrizado dentro de transacciones interactivas (`prisma.$transaction(async t
 
 **Razón**: la constitución exige PostgreSQL; Prisma da tipado y migraciones sin perder acceso a
 SQL para las operaciones atómicas.
+
+**Dimensionamiento de transacciones (revisión analyze)**: las escrituras de un mismo vuelo se
+serializan en la fila del vuelo (§6). Con 100 bloqueos simultáneos, cada transacción
+interactiva espera primero una conexión y luego el lock. Con los valores por defecto de Prisma
+(2 s para obtener conexión, 5 s de duración máxima), las últimas solicitudes fallarían con
+P2028 y romperían la prueba de concurrencia. Se fijan `maxWait = 10000` y `timeout = 10000` ms
+en las transacciones interactivas y un pool de 20 conexiones. **(bloque 1)** Con Prisma 7 el pool
+lo define el adaptador `@prisma/adapter-pg` (`max`, variable `DB_POOL_MAX`, por defecto 20), no
+el parámetro `connection_limit` de la URL, que el adaptador ignora. Un P2028 residual
+se registra y responde `500 INTERNAL_ERROR`; la prueba de concurrencia exige que no aparezca
+ningún 500.
 
 **Alternativas descartadas**: TypeORM (tipado más débil, más configuración); Drizzle (válido,
 pero el documento fuente fija Prisma); SQL puro (más código repetido).
@@ -94,13 +126,16 @@ VII).
 ## 6. Bloqueo de la fila del vuelo y orden de locks **(refinamiento)**
 
 **Decisión**: toda operación que cambia asientos o el estado de un vuelo empieza su transacción
-bloqueando la fila del vuelo con una sentencia condicional que incrementa la secuencia y
-verifica a la vez que el vuelo admite la operación, por ejemplo para un bloqueo:
-`UPDATE flights SET seq = seq + 1 WHERE id = :id AND status IN ('SCHEDULED','DELAYED') AND
-departure_at > :now RETURNING seq`. Sin fila devuelta, la operación responde
-`409 FLIGHT_NOT_BOOKABLE`. Si un paso posterior falla, el rollback deshace el incremento, de
-modo que la secuencia no tiene huecos. Orden de locks fijo en todas las operaciones:
-**vuelo → advisory lock del cliente → asientos**.
+bloqueando la fila del vuelo con una sentencia condicional que verifica a la vez que el vuelo
+admite la operación, por ejemplo para un bloqueo: `UPDATE flights SET seq = seq WHERE id = :id
+AND status IN ('SCHEDULED','DELAYED') AND departure_at > :now RETURNING seq`. Sin fila
+devuelta, la operación responde `422 FLIGHT_NOT_BOOKABLE`. El escritor de eventos (§13) avanza
+después `seq` en n al registrar los n eventos de la operación, sobre la fila ya bloqueada; si
+un paso posterior falla, el rollback deshace todo, de modo que la secuencia no tiene huecos.
+Orden de locks fijo en todas las operaciones: **vuelo → advisory lock del cliente →
+asientos**. La primitiva vive en `shared-kernel/infrastructure/persistence/flight-write-lock.ts`
+detrás del puerto `FlightWriteLock`, porque la usan `seats`, `bookings` y `admin` (§3,
+revisión analyze).
 
 **Razón**: sin este paso hay dos defectos:
 
@@ -113,7 +148,7 @@ modo que la secuencia no tiene huecos. Orden de locks fijo en todas las operacio
    Además, el lock de fila garantiza que el orden de `seq` coincide con el orden de commit.
 
 El costo es serializar las escrituras de un mismo vuelo; con 180 asientos y transacciones de
-milisegundos no afecta los objetivos (100 bloqueos simultáneos terminan en menos de 1 s).
+milisegundos no afecta los objetivos, siempre que las transacciones estén dimensionadas (§4).
 
 **Alternativas descartadas**: asignar `seq` con una secuencia de PostgreSQL por vuelo (no
 garantiza orden igual al commit); subconsulta `EXISTS` sobre el vuelo dentro del `UPDATE` del
@@ -157,22 +192,26 @@ cliente); 404 (el asiento existe).
 
 ## 9. Confirmación de la reserva
 
-**Decisión**: una transacción que:
+**Decisión** **(revisión analyze)**: el caso de uso `CreateBooking` ejecuta estos pasos dentro
+del puerto `UnitOfWork` (una sola transacción). Cada módulo escribe solo sus tablas a través
+de su puerto (§3):
 
-1. Inserta la clave de idempotencia (decisión 10).
-2. Bloquea la fila del vuelo con la condición `status IN ('SCHEDULED','DELAYED')`; si falla,
-   `409 FLIGHT_NOT_BOOKABLE` (por ejemplo, vuelo cancelado).
-3. Ejecuta el `UPDATE` condicional `HELD → BOOKED WHERE flight_id = :f AND held_by = :c AND
-   hold_expires_at > :now AND seat_id IN (:asientos de la solicitud)`.
-4. Exige que el conteo sea igual al número de asientos de la solicitud y al número de bloqueos
-   vigentes del cliente en el vuelo. Si no coincide: rollback y `410 HOLD_EXPIRED`. Si la
-   solicitud omite asientos bloqueados vigentes, `422 PASSENGERS_MISMATCH` (para comprar menos,
-   el cliente libera antes los que no quiere).
-5. Cobra con el puerto `PaymentGateway`. Si `FakePaymentGateway` rechaza: rollback (los asientos
-   siguen `HELD` con su vencimiento original) y `402 PAYMENT_DECLINED`.
-6. Inserta `bookings` y `booking_seats` (`UNIQUE(seat_id)` como última defensa).
-7. Marca el vuelo `SOLD_OUT` con una sentencia condicional si no quedan asientos sin reservar
-   (decisión 14).
+1. `IdempotencyStore.reserve`: inserta la clave de idempotencia (decisión 10).
+2. Lock de escritura del vuelo con la condición `status IN ('SCHEDULED','DELAYED')` (primitiva
+   compartida, §6). Si falla, `422 FLIGHT_NOT_BOOKABLE` (por ejemplo, vuelo cancelado).
+3. `SeatHoldRepository.markBooked`: `UPDATE` condicional `HELD → BOOKED WHERE flight_id = :f
+   AND held_by = :c AND hold_expires_at > :now AND (row, letter) IN (:asientos de la
+   solicitud) RETURNING id`.
+4. Verificación posterior a la escritura, dentro de la misma transacción: el conteo debe ser
+   igual al número de asientos de la solicitud (si no, rollback y `410 HOLD_EXPIRED`), y el
+   cliente no debe conservar otros bloqueos vigentes en el vuelo (si no, rollback y
+   `422 PASSENGERS_MISMATCH`; para comprar menos, el cliente libera antes los que no quiere).
+5. `PaymentGateway.charge`. Si `FakePaymentGateway` rechaza: rollback (los asientos siguen
+   `HELD` con su vencimiento original) y `402 PAYMENT_DECLINED`.
+6. `BookingRepository.save`: inserta `bookings` y `booking_seats` (`UNIQUE(seat_id)` como
+   última defensa).
+7. `FlightRepository.markSoldOutIfFull`: marca el vuelo `SOLD_OUT` con una sentencia
+   condicional si no quedan asientos sin reservar (decisión 14).
 8. Inserta los eventos en `flight_events`, hace commit y publica.
 
 El código de reserva son 6 caracteres de `A-Z0-9` aleatorios con `UNIQUE`; ante colisión se
@@ -251,8 +290,37 @@ de datos); usar `now()` de PostgreSQL (no se puede controlar desde la prueba).
 transacción, con la `seq` asignada por el lock del vuelo (decisión 6; una operación que genera
 n eventos avanza `seq` en n y los numera consecutivamente). Tras el commit los publican en un
 EventBus interno (EventEmitter2) a través del puerto `EventPublisher`; el `RealtimeGateway` los
-traduce a Socket.io. Cada transacción emite además un único `flight:stats` con la `seq` del
-último evento.
+traduce a Socket.io. El escritor de eventos es una primitiva compartida
+(`shared-kernel/infrastructure/persistence/flight-events.writer.ts`).
+
+**Rooms y secuencia (revisión analyze)**:
+
+- En el room `flight:{id}` solo viajan `seat:held`, `seat:released`, `seat:booked` y
+  `flight:updated`. Cada uno tiene una `seq` distinta y consecutiva. Ahí **no** se emite
+  `flight:stats`: el mapa y el tablero derivan los contadores de su propio estado de asientos
+  (snapshot + eventos). Así, en ese room ningún evento repite la `seq` del anterior, y aplica
+  literalmente la regla del principio II (descartar `seq` ≤ última; ante un salto, volver a
+  pedir el estado por HTTP).
+- En el room `search` solo viaja `flight:stats`: uno por transacción, con la `seq` del último
+  evento de esa transacción y el resumen completo del vuelo (estado, horas, `delayed`,
+  `availableSeats`, contadores y `change` si cambió el estado). El cliente lo aplica si su
+  `seq` es la siguiente a la última vista para ese vuelo. Ante un salto (transacciones con
+  varios eventos), vuelve a pedir el vuelo con `GET /api/flights/:id`, que incluye `seq`, y
+  agrupa los pedidos en 250 ms.
+
+**Snapshot coherente (revisión analyze)**: `GET /api/flights/:id/seats` y
+`GET /api/flights/:id/stats` leen `flights.seq` y los asientos dentro de una transacción de
+solo lectura `REPEATABLE READ`, de modo que ambos datos corresponden al mismo instante. Si se
+leyeran por separado en `READ COMMITTED`, un commit intermedio podría dejar un `seq` posterior
+a los asientos leídos, y el evento correspondiente nunca se aplicaría. `GET /api/flights/:id`
+calcula `seq` y `availableSeats` en una sola sentencia, que ya es coherente.
+
+**Orden de publicación (nota U5)**: dos transacciones de un mismo vuelo hacen commit en orden
+de `seq`, pero publican después del commit de forma asíncrona, así que un cliente puede recibir
+`seq` 6 antes que 5. El reductor lo trata como un salto: pide el snapshot (que ya refleja 5 y 6)
+y descarta después el 5 por viejo. El resultado es correcto; el costo es un pedido de snapshot
+extra, poco frecuente con la carga del prototipo. Se descartó serializar la publicación con una
+cola por vuelo: añade estado en el gateway para un beneficio menor.
 
 **Razón**: principio II (publicar solo tras el commit, cada evento con `flightId`, `seatId`,
 estado, `seq` y fecha). `flight_events` da el registro de actividad del tablero al cargar
@@ -271,16 +339,17 @@ al reiniciar y no muestra eventos previos a abrir el tablero).
   `UPDATE flights SET status = 'SOLD_OUT' WHERE id = :f AND status IN ('SCHEDULED','DELAYED')
   AND NOT EXISTS (SELECT 1 FROM seats WHERE flight_id = :f AND status <> 'BOOKED')`; si cambia,
   se emite `flight:updated`. Nunca vuelve atrás (no hay cancelación de reservas).
-- **Retraso** **(refinamiento)**: `flights` guarda `scheduled_departure_at` (original) y
+- **Retraso** **(refinamiento)**: `FlightRepository.delay`. `flights` guarda `scheduled_departure_at` (original) y
   `departure_at` / `arrival_at` (vigentes). El retraso exige `newDepartureAt > departure_at`
   (si no, `422 INVALID_DELAY`) y desplaza la llegada lo mismo. El estado pasa a `DELAYED`,
   salvo si el vuelo está `SOLD_OUT`, que conserva su estado; el retraso se deduce de
   `departure_at > scheduled_departure_at`. La búsqueda usa `departure_at`, así que un retraso
   que cambia de día mueve el vuelo a los resultados de la nueva fecha.
-- **Cancelación**: transacción que bloquea el vuelo con `status <> 'CANCELLED'` (si no,
-  `409 FLIGHT_STATUS_CONFLICT`), pasa a `CANCELLED`, libera todos los bloqueos con `RETURNING`,
-  y emite `seat:released` (`reason: FLIGHT_CANCELLED`) por asiento y `flight:updated`. Las
-  reservas existentes se conservan.
+- **Cancelación** **(revisión analyze)**: `UpdateFlightStatus` ejecuta dentro de `UnitOfWork`:
+  lock del vuelo con `status <> 'CANCELLED'` (si no, `422 FLIGHT_STATUS_CONFLICT`),
+  `FlightRepository.cancel` (pasa a `CANCELLED`) y `SeatHoldRepository.releaseAllHeld`
+  (libera todos los bloqueos con `RETURNING`). Emite `seat:released` (`reason:
+  FLIGHT_CANCELLED`) por asiento y `flight:updated`. Las reservas existentes se conservan.
 
 **Razón**: cubre los supuestos de la spec (AGOTADO solo por reservas, AGOTADO retrasado sigue
 sin admitir bloqueos, CANCELADO final) con sentencias atómicas.
@@ -308,9 +377,9 @@ por cliente con eventos personalizados (más eventos y lógica en el gateway).
 
 **Decisión**: namespace `/realtime`; rooms `flight:{flightId}` (mapa y tablero) y `search`
 (resultados). Cliente → servidor: `flight:join`, `flight:leave`, `search:subscribe`. Servidor →
-cliente: `seat:held`, `seat:released`, `seat:booked`, `flight:updated`, `flight:stats`. Al room
-`search` se envían `flight:updated` y `flight:stats` de todos los vuelos, y el frontend filtra
-por los vuelos listados. Catálogo completo en
+cliente: `seat:held`, `seat:released`, `seat:booked` y `flight:updated` al room del vuelo, y
+`flight:stats` (resumen por transacción) al room `search`, de todos los vuelos; el frontend
+filtra por los vuelos listados (ver §13). Catálogo completo en
 [contracts/realtime-events.md](./contracts/realtime-events.md).
 
 **Razón**: principio II (comandos por HTTP, eventos por socket). Un único room de búsqueda es
@@ -331,15 +400,19 @@ Un filtro global devuelve siempre `{ code, message, details }`. Mapa de códigos
 | 401 | Clave de administrador ausente o incorrecta | `ADMIN_UNAUTHORIZED` |
 | 402 | Pago ficticio rechazado | `PAYMENT_DECLINED` |
 | 404 | Recurso inexistente | `FLIGHT_NOT_FOUND`, `SEAT_NOT_FOUND`, `BOOKING_NOT_FOUND` |
-| 409 | Conflicto de estado del asiento o del vuelo | `SEAT_UNAVAILABLE`, `SEAT_NOT_HELD`, `FLIGHT_NOT_BOOKABLE`, `FLIGHT_STATUS_CONFLICT` |
+| 409 | Conflicto de asiento (ya bloqueado o reservado por otro, o no es del cliente) | `SEAT_UNAVAILABLE`, `SEAT_NOT_HELD` |
 | 410 | Bloqueo expirado | `HOLD_EXPIRED` |
-| 422 | Validación de esquema o de negocio | `VALIDATION_ERROR`, `HOLD_LIMIT_REACHED`, `PASSENGERS_MISMATCH`, `INVALID_DELAY`, `IDEMPOTENCY_KEY_REUSED` |
+| 422 | Validación de esquema o de negocio | `VALIDATION_ERROR`, `HOLD_LIMIT_REACHED`, `PASSENGERS_MISMATCH`, `INVALID_DELAY`, `IDEMPOTENCY_KEY_REUSED`, `FLIGHT_NOT_BOOKABLE`, `FLIGHT_STATUS_CONFLICT` |
 
 Los errores de zod se devuelven como `422 VALIDATION_ERROR` con la lista de campos en
 `details` (nestjs-zod responde 400 por defecto; el filtro lo ajusta). La clave de administrador
 se compara en tiempo constante (`timingSafeEqual`).
 
 **Razón**: principio VI (constitución 1.0.1, que lista el 401 y los casos 422 de esta tabla).
+**(revisión analyze)** La constitución reserva el 409 para conflictos de asiento. Por eso un
+vuelo que no admite bloqueos ni confirmaciones (`FLIGHT_NOT_BOOKABLE`) y un cambio sobre un
+vuelo ya cancelado (`FLIGHT_STATUS_CONFLICT`) se tratan como reglas de negocio y responden
+422.
 
 **Alternativas descartadas**: 403 para la clave incorrecta (no hay identidad autenticada que
 autorizar; 401 es la convención para credencial ausente o inválida); GraphQL (los códigos HTTP
@@ -365,7 +438,12 @@ componentes standalone, signals y RxJS.
   `/flights/:id/dashboard`, `/admin`.
 - **RealtimeService**: envuelve `socket.io-client` tipado con los eventos de `shared`, expone un
   Observable por evento y un signal `connection` (`connected` | `reconnecting`).
-- **Estado del mapa**: un reductor puro aplica solo eventos con `seq` mayor al último visto. Al
+- **Estado del vuelo** **(revisión analyze)**: un único reductor puro
+  (`core/flight-state/flight-state.reducer.ts`) lo comparten el mapa y el tablero; los
+  contadores del tablero se derivan del estado de asientos, nunca de un evento aparte.
+- **Resultados de búsqueda**: aplican `flight:stats` si su `seq` es la siguiente para ese
+  vuelo; ante un salto, piden `GET /api/flights/:id` (agrupado en 250 ms).
+- **Estado del mapa**: el reductor aplica solo el evento con `seq` siguiente a la última vista. Al
   entrar: unirse al room, pedir el snapshot, guardar en un buffer los eventos recibidos
   mientras tanto y aplicar los de `seq` mayor al del snapshot. Si hay hueco de `seq` o una
   reconexión, se vuelve a pedir el snapshot y las acciones quedan deshabilitadas hasta
@@ -380,7 +458,7 @@ componentes standalone, signals y RxJS.
   con Enter o Espacio. Los estados se muestran con color e icono. Resaltado de unos 600 ms
   ante cambios remotos sin mover el foco ni la vista, y una región `aria-live="polite"` para el
   asiento enfocado.
-- **Layout**: panel de resumen sticky a la derecha (abajo en móvil) con asientos, total y barra
+- **Layout**: panel de resumen sticky a la derecha (abajo en pantallas de 640 px o menos) con asientos, total y barra
   de cuenta regresiva; badge de conexión en el header. Angular Material solo para formularios,
   diálogos y toasts. Tokens de diseño en variables CSS, mobile first y contraste mínimo 4,5:1.
 - **Boleto tras recargar**: `/booking/:code` muestra el boleto de la respuesta de compra; si se
@@ -405,6 +483,10 @@ necesita control total del diseño).
   confirmar; idempotencia; cancelación con bloqueos activos; clave de admin incorrecta da 401;
   lookup con correo incorrecto da 404; además, el límite de 4 y el pago rechazado conservan los
   bloqueos.
+- **Tiempos (nota G2)**: la prueba de expiración exige, con reloj real y barrido de 2000 ms,
+  que el evento `EXPIRED` llegue a un socket suscrito en ≤ 3 s tras el vencimiento. La del
+  gateway exige que un segundo socket reciba el evento en < 1 s desde la respuesta del comando.
+  La validación final anota en el README los tiempos medidos.
 - **Frontend**: runner por defecto del Angular CLI; pruebas de `RealtimeService` y del reductor
   del mapa con eventos desordenados, duplicados y con huecos.
 - **Opcional**: Playwright con dos contextos de navegador para la prueba de dos pestañas.
@@ -418,9 +500,11 @@ mocks del repositorio para concurrencia (no prueban nada).
 
 **Decisión**: `docker compose up` levanta `postgres:16` (con healthcheck), `api` (aplica
 `prisma migrate deploy`, ejecuta el seed si la base está vacía y arranca) y `web` (build de
-Angular servido por nginx, que hace de proxy para `/api` y `/socket.io` con soporte de
+Angular servido por nginx, que hace de proxy para `/api`, `/health` y `/socket.io` con soporte de
 upgrade). Variables: `DATABASE_URL`, `ADMIN_KEY`, `HOLD_TTL_SECONDS`, `HOLD_SWEEP_INTERVAL_MS`,
-`PORT`, `LOG_LEVEL`.
+`PORT`, `LOG_LEVEL`. **(nota U3)** En desarrollo, `frontend/proxy.conf.json` reenvía de :4200 a
+:3000 `/api`, `/health` y `/socket.io` (con `ws: true`), que es la ruta HTTP por la que viaja el
+namespace `/realtime`.
 
 **Razón**: CE-004 y principio VII: un solo comando, mismo origen (sin CORS).
 
@@ -434,7 +518,9 @@ en Bogotá. Crea los 5 aeropuertos y las 20 rutas dirigidas entre BOG, MDE, CLO,
 3 vuelos diarios por ruta durante 7 días (420 vuelos), cada uno con 180 asientos (30 × 6). Los
 identificadores son deterministas (UUID v5 a partir del número de vuelo y la fecha). Para
 probar AGOTADO y el tablero incluye un vuelo casi lleno (1 asiento libre). Volver a ejecutarlo
-borra y regenera.
+borra y regenera. **(nota U4)** Los 179 asientos reservados del vuelo casi lleno pertenecen a
+reservas reales agrupadas de a 4 (44 reservas de 4 asientos y 1 de 3), con comprador,
+pasajeros y código deterministas, para que no haya asientos `BOOKED` sin reserva.
 
 **Razón**: "seeds reproducibles" (principio VIII) y datos útiles para demostrar cada historia.
 
@@ -445,8 +531,10 @@ borra y regenera.
 
 **Decisión**: ESLint + Prettier compartidos desde la raíz, sin `any` (regla
 `@typescript-eslint/no-explicit-any` como error). Logs JSON con pino (nestjs-pino) que incluyen
-`flightId`, `seatId` y `clientId` cuando aplica (nunca datos de tarjeta). `GET /api/health`
-verifica la base con `SELECT 1`. Commits con Conventional Commits.
+`flightId`, `seatId` y `clientId` cuando aplica (nunca datos de tarjeta). `GET /health`
+(fuera del prefijo `/api`, como pide la constitución, principio VIII) verifica la base con
+`SELECT 1`. Commits con Conventional Commits. **(nota G3)** Los scripts raíz `lint`,
+`typecheck` (`tsc --noEmit` en los tres paquetes) y `test` forman la puerta de calidad.
 
 **Razón**: principio VIII.
 

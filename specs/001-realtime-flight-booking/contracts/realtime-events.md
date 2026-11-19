@@ -33,7 +33,7 @@ cambiar estado van por REST ([openapi.yaml](./openapi.yaml)). Los eventos se emi
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
 | `flightId` | uuid | Vuelo afectado |
-| `seq` | integer | Secuencia del vuelo; aumenta en 1 por evento de asiento o de vuelo |
+| `seq` | integer | Secuencia del vuelo; aumenta en 1 por evento de asiento o de vuelo. En el room `flight:{id}` cada evento tiene una `seq` distinta y consecutiva |
 | `occurredAt` | ISO 8601 UTC | Hora del reloj inyectado al hacer el cambio |
 
 ### Eventos
@@ -43,8 +43,13 @@ cambiar estado van por REST ([openapi.yaml](./openapi.yaml)). Los eventos se emi
 | `seat:held` | `flight:{id}` | `seatId`, `status: 'HELD'`, `holdExpiresAt`, `holderTag` | Bloqueo, incluida la toma de un bloqueo vencido |
 | `seat:released` | `flight:{id}` | `seatId`, `status: 'AVAILABLE'`, `reason: 'MANUAL' \| 'EXPIRED' \| 'FLIGHT_CANCELLED'` | Liberación manual, vencimiento (job) o cancelación del vuelo |
 | `seat:booked` | `flight:{id}` | `seatId`, `status: 'BOOKED'` | Confirmación; un evento por asiento con `seq` consecutivas |
-| `flight:updated` | `flight:{id}`, `search` | `status`, `departureAt`, `arrivalAt`, `scheduledDepartureAt`, `delayed`, `change: 'DELAYED' \| 'CANCELLED' \| 'SOLD_OUT'` | Retraso, cancelación o AGOTADO |
-| `flight:stats` | `flight:{id}`, `search` | `stats: { available, held, booked, total }` | Una vez por transacción que cambia asientos o estado, con la `seq` del último evento de esa transacción |
+| `flight:updated` | `flight:{id}` | `status`, `departureAt`, `arrivalAt`, `scheduledDepartureAt`, `delayed`, `change: 'DELAYED' \| 'CANCELLED' \| 'SOLD_OUT'` | Retraso, cancelación o AGOTADO |
+| `flight:stats` | `search` (solo) | Resumen completo: `status`, `departureAt`, `arrivalAt`, `delayed`, `availableSeats`, `stats: { available, held, booked, total }` y `change` opcional (`'DELAYED' \| 'CANCELLED' \| 'SOLD_OUT'`) | Una vez por transacción que cambia asientos o el estado del vuelo, con la `seq` del último evento de esa transacción |
+
+**Por qué `flight:stats` no viaja al room del vuelo**: su `seq` coincide con la del último
+evento de la transacción. En el room del vuelo eso obligaría a aplicar un evento con `seq` igual
+a la última aplicada, lo que prohíbe el principio II. El mapa y el tablero derivan los
+contadores de su propio estado de asientos.
 
 `holderTag` = primeros 16 caracteres hexadecimales de SHA-256(`clientId`). El `clientId` nunca
 viaja en un evento. El frontend obtiene su propio tag en `GET /clients/me/holds`.
@@ -66,9 +71,11 @@ viaja en un evento. El frontend obtiene su propio tag en `GET /clients/me/holds`
 ```
 
 ```json
-{ "event": "flight:stats", "data": {
+{ "event": "flight:stats", "room": "search", "data": {
   "flightId": "5b0c6f1e-0d3a-5f7e-9c41-2a8e1f0b7d10", "seq": 43,
-  "occurredAt": "2026-11-19T14:13:12.010Z",
+  "occurredAt": "2026-11-19T14:13:12.010Z", "status": "SCHEDULED",
+  "departureAt": "2026-11-19T20:00:00.000Z", "arrivalAt": "2026-11-19T21:00:00.000Z",
+  "delayed": false, "availableSeats": 170,
   "stats": { "available": 170, "held": 2, "booked": 8, "total": 180 } } }
 ```
 
@@ -80,10 +87,13 @@ viaja en un evento. El frontend obtiene su propio tag en `GET /clients/me/holds`
    `seq === ultimaSeq + 1`. Si `seq <= ultimaSeq`, descartarlo (duplicado o viejo).
 3. **Huecos**: si `seq > ultimaSeq + 1`, pedir el snapshot de nuevo y deshabilitar las acciones
    hasta tenerlo.
-4. **Estadísticas**: aplicar `flight:stats` si su `seq` es mayor o igual a la del último
-   `flight:stats` aplicado; no avanza `ultimaSeq`.
+4. **Contadores** (mapa y tablero): se derivan del estado de asientos que mantiene el reductor
+   compartido; en el room del vuelo no hay `flight:stats`.
 5. **Reconexión**: al reconectar, volver a unirse a los rooms, pedir el snapshot (y
    `GET /clients/me/holds` en el mapa y el pago) y volver a permitir acciones solo después.
-6. **Resultados de búsqueda**: filtrar `flight:updated` y `flight:stats` por los vuelos listados
-   y aplicar por `flightId` la regla de `seq` mayor a la última vista para ese vuelo.
+6. **Resultados de búsqueda** (room `search`): filtrar `flight:stats` por los vuelos listados y,
+   por `flightId`: descartar si `seq <= ultimaSeq`; aplicar el resumen si
+   `seq === ultimaSeq + 1`; ante un salto, volver a pedir el vuelo con
+   `GET /api/flights/:id` (incluye `seq`), agrupando pedidos en 250 ms, y descartar los
+   eventos con `seq` menor o igual a la del vuelo recibido.
 7. **Propiedad**: un asiento `HELD` es "mío" si `holderTag` coincide con el propio.

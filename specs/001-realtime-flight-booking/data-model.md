@@ -18,6 +18,11 @@ muestran en `America/Bogota`. Los importes son pesos colombianos enteros (sin de
 
 ## Entidades y tablas
 
+**Módulo dueño de cada tabla** (único que la escribe, principio IV; ver research.md §3):
+`flights` → módulo `flights`; `seats` → `seats`; `bookings`, `booking_seats` e
+`idempotency_keys` → `bookings`; `flight_events` → primitiva compartida de `shared-kernel`;
+`airports` → solo el seed.
+
 ### `airports`
 
 | Columna | Tipo | Reglas |
@@ -44,7 +49,7 @@ muestran en `America/Bogota`. Los importes son pesos colombianos enteros (sin de
 
 Índices: `(origin, destination, departure_at)` para la búsqueda.
 
-Campos derivados en `FlightDto`: `durationMinutes` (`arrival_at - departure_at`), `delayed`
+Campos derivados en `FlightDto`: `seq` (copia de `flights.seq`, para resincronizar la búsqueda), `durationMinutes` (`arrival_at - departure_at`), `delayed`
 (`departure_at > scheduled_departure_at`) y `availableSeats` (con verificación perezosa).
 
 ### `seats`
@@ -107,7 +112,7 @@ PK: `(booking_id, seat_id)`.
 | `client_id` | `uuid` | |
 | `key` | `uuid` | Valor del header `Idempotency-Key` |
 | `request_hash` | `char(64)` | SHA-256 del cuerpo normalizado |
-| `booking_id` | `uuid` FK → `bookings` | |
+| `booking_id` | `uuid` null FK → `bookings` | Se completa en la misma transacción al guardar la reserva (`attach`); tras el commit nunca es nulo |
 | `created_at` | `timestamptz` | |
 
 PK: `(client_id, key)`. Solo existen filas de confirmaciones exitosas (ver research §10).
@@ -119,7 +124,7 @@ PK: `(client_id, key)`. Solo existen filas de confirmaciones exitosas (ver resea
 | `flight_id` | `uuid` FK → `flights` | |
 | `seq` | `bigint` | Igual a `flights.seq` tras el evento |
 | `type` | `FlightEventType` | |
-| `seat_code` | `char(3)` null | Ej. `12C`; nulo en `FLIGHT_UPDATED` |
+| `seat_code` | `varchar(3)` null | Ej. `12C` o `1A` (sin relleno); nulo en `FLIGHT_UPDATED` |
 | `payload` | `jsonb` | Payload completo del evento publicado (sin `clientId`) |
 | `occurred_at` | `timestamptz` | Hora del reloj inyectado |
 
@@ -147,12 +152,12 @@ stateDiagram-v2
 
 | # | Transición | Disparador | Condición atómica (`UPDATE ... WHERE`) | Respuesta si no cumple | Evento |
 |---|------------|------------|----------------------------------------|------------------------|--------|
-| T1 | AVAILABLE → HELD | `POST .../hold` | `status = 'AVAILABLE' OR (status = 'HELD' AND hold_expires_at < :now)`; vuelo bloqueado previamente con `status IN (SCHEDULED, DELAYED) AND departure_at > :now`; cliente con menos de 4 bloqueos vigentes | 409 `SEAT_UNAVAILABLE`, 409 `FLIGHT_NOT_BOOKABLE`, 422 `HOLD_LIMIT_REACHED` | `seat:held` |
+| T1 | AVAILABLE → HELD | `POST .../hold` | `status = 'AVAILABLE' OR (status = 'HELD' AND hold_expires_at < :now)`; vuelo bloqueado previamente con `status IN (SCHEDULED, DELAYED) AND departure_at > :now`; cliente con menos de 4 bloqueos vigentes | 409 `SEAT_UNAVAILABLE`, 422 `FLIGHT_NOT_BOOKABLE`, 422 `HOLD_LIMIT_REACHED` | `seat:held` |
 | T2 | HELD (vencido) → HELD | `POST .../hold` de otro cliente | Igual que T1 (rama `hold_expires_at < :now`) | Igual que T1 | `seat:held` (con el nuevo `holderTag`) |
 | T3 | HELD → AVAILABLE | `DELETE .../hold` | `status = 'HELD' AND held_by = :client AND hold_expires_at > :now` | 409 `SEAT_NOT_HELD` | `seat:released` (`MANUAL`) |
 | T4 | HELD → AVAILABLE | Job de expiración | `status = 'HELD' AND hold_expires_at <= :now` | — | `seat:released` (`EXPIRED`) |
 | T5 | HELD → AVAILABLE | Cancelación del vuelo | `flight_id = :f AND status = 'HELD'` | — | `seat:released` (`FLIGHT_CANCELLED`) |
-| T6 | HELD → BOOKED | `POST /bookings` | `status = 'HELD' AND held_by = :client AND hold_expires_at > :now AND code IN (:asientos)`; conteo = asientos solicitados = bloqueos vigentes del cliente | 410 `HOLD_EXPIRED`, 422 `PASSENGERS_MISMATCH`, 409 `FLIGHT_NOT_BOOKABLE`, 402 `PAYMENT_DECLINED` (rollback) | `seat:booked` |
+| T6 | HELD → BOOKED | `POST /bookings` | `status = 'HELD' AND held_by = :client AND hold_expires_at > :now AND (row, letter) IN (:asientos)`; después, conteo = asientos solicitados y sin otros bloqueos vigentes del cliente en el vuelo | 410 `HOLD_EXPIRED`, 422 `PASSENGERS_MISMATCH`, 422 `FLIGHT_NOT_BOOKABLE`, 402 `PAYMENT_DECLINED` (rollback) | `seat:booked` |
 
 Al pasar a `AVAILABLE` se ponen a `NULL` `held_by` y `hold_expires_at`. Toda transición
 incrementa `version`. `BOOKED` es terminal.
@@ -183,8 +188,8 @@ stateDiagram-v2
 | Regla | Respuesta si no cumple |
 |-------|------------------------|
 | Retrasar exige `newDepartureAt > departure_at`; `arrival_at` se desplaza lo mismo | 422 `INVALID_DELAY` |
-| Un vuelo `CANCELLED` no admite cambios | 409 `FLIGHT_STATUS_CONFLICT` |
-| Solo `SCHEDULED` o `DELAYED` con `departure_at > now` admiten bloqueos y confirmaciones | 409 `FLIGHT_NOT_BOOKABLE` |
+| Un vuelo `CANCELLED` no admite cambios | 422 `FLIGHT_STATUS_CONFLICT` |
+| Solo `SCHEDULED` o `DELAYED` con `departure_at > now` admiten bloqueos y confirmaciones | 422 `FLIGHT_NOT_BOOKABLE` |
 | `SOLD_OUT` solo lo pone el sistema, nunca el administrador | 422 `VALIDATION_ERROR` |
 
 ## Invariantes

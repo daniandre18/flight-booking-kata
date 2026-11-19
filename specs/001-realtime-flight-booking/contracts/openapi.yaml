@@ -36,7 +36,7 @@ paths:
   /flights/{flightId}:
     get:
       tags: [flights]
-      summary: Detalle de un vuelo
+      summary: Detalle de un vuelo (incluye seq para resincronizar la búsqueda)
       operationId: getFlight
       parameters: [ { $ref: '#/components/parameters/FlightId' } ]
       responses:
@@ -47,7 +47,7 @@ paths:
     get:
       tags: [seats]
       summary: Snapshot del mapa de asientos con la secuencia del vuelo
-      description: Los bloqueos vencidos se presentan como AVAILABLE (vista perezosa).
+      description: Los bloqueos vencidos se presentan como AVAILABLE (vista perezosa). seq y asientos se leen en una transacción REPEATABLE READ (mismo instante).
       operationId: getSeatMap
       parameters: [ { $ref: '#/components/parameters/FlightId' } ]
       responses:
@@ -93,8 +93,8 @@ paths:
         '201': { description: Bloqueado, content: { application/json: { schema: { $ref: '#/components/schemas/HoldSeatResponse' } } } }
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { description: 'SEAT_UNAVAILABLE o FLIGHT_NOT_BOOKABLE', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
-        '422': { description: 'HOLD_LIMIT_REACHED (ya tiene 4 bloqueos en el vuelo)', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '409': { description: 'SEAT_UNAVAILABLE (bloqueado o reservado por otro)', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '422': { description: 'HOLD_LIMIT_REACHED (ya tiene 4 bloqueos en el vuelo) o FLIGHT_NOT_BOOKABLE (vuelo cancelado, agotado o ya salido)', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
     delete:
       tags: [seats]
       summary: Liberar un asiento bloqueado por el propio cliente
@@ -141,9 +141,8 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '402': { description: PAYMENT_DECLINED (los bloqueos se conservan), content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { description: FLIGHT_NOT_BOOKABLE (por ejemplo, vuelo cancelado), content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
         '410': { description: HOLD_EXPIRED, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
-        '422': { description: 'VALIDATION_ERROR, PASSENGERS_MISMATCH o IDEMPOTENCY_KEY_REUSED', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '422': { description: 'VALIDATION_ERROR, PASSENGERS_MISMATCH, IDEMPOTENCY_KEY_REUSED o FLIGHT_NOT_BOOKABLE (por ejemplo, vuelo cancelado)', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
 
   /bookings/lookup:
     post:
@@ -174,10 +173,12 @@ paths:
         '200': { description: Vuelo actualizado, content: { application/json: { schema: { $ref: '#/components/schemas/FlightDto' } } } }
         '401': { description: ADMIN_UNAUTHORIZED, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { description: FLIGHT_STATUS_CONFLICT (vuelo ya cancelado), content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
-        '422': { description: 'VALIDATION_ERROR o INVALID_DELAY', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '422': { description: 'VALIDATION_ERROR, INVALID_DELAY o FLIGHT_STATUS_CONFLICT (vuelo ya cancelado)', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
 
   /health:
+    servers:
+      - url: /
+        description: Fuera del prefijo /api (constitución, principio VIII)
     get:
       tags: [health]
       summary: Estado del servicio y de la base de datos
@@ -193,7 +194,7 @@ paths:
                 properties:
                   status: { type: string, enum: [ok] }
                   db: { type: string, enum: [up] }
-        '503': { description: Base de datos no disponible, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '503': { description: SERVICE_UNAVAILABLE (base de datos no disponible), content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
 
 components:
   parameters:
@@ -230,6 +231,7 @@ components:
         - FLIGHT_NOT_FOUND
         - SEAT_NOT_FOUND
         - BOOKING_NOT_FOUND
+        - ROUTE_NOT_FOUND
         - SEAT_UNAVAILABLE
         - SEAT_NOT_HELD
         - FLIGHT_NOT_BOOKABLE
@@ -241,6 +243,7 @@ components:
         - INVALID_DELAY
         - IDEMPOTENCY_KEY_REUSED
         - INTERNAL_ERROR
+        - SERVICE_UNAVAILABLE
 
     ErrorResponse:
       type: object
@@ -264,9 +267,10 @@ components:
 
     FlightDto:
       type: object
-      required: [id, flightNumber, origin, destination, scheduledDepartureAt, departureAt, arrivalAt, durationMinutes, fare, status, delayed, availableSeats, capacity]
+      required: [id, flightNumber, origin, destination, scheduledDepartureAt, departureAt, arrivalAt, durationMinutes, fare, status, delayed, availableSeats, capacity, seq]
       properties:
         id: { type: string, format: uuid }
+        seq: { type: integer, description: 'Secuencia del vuelo leída en la misma sentencia que availableSeats' }
         flightNumber: { type: string, examples: [KT1234] }
         origin: { $ref: '#/components/schemas/AirportCode' }
         destination: { $ref: '#/components/schemas/AirportCode' }

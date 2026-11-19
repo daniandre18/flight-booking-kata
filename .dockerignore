@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/coverage
+**/.angular
+backend/src/generated
+.git
+.specify
+.claude
+specs
+docs
+**/*.log
+.env
+.env.*
+**/.DS_Store

@@ -1,0 +1,35 @@
+{
+  "name": "frontend",
+  "version": "0.0.0",
+  "scripts": {
+    "ng": "ng",
+    "dev": "ng serve --proxy-config proxy.conf.json",
+    "build": "ng build",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.spec.json --noEmit",
+    "test": "ng test --watch=false"
+  },
+  "private": true,
+  "dependencies": {
+    "@angular/cdk": "^22.3.0",
+    "@angular/common": "^22.2.0",
+    "@angular/compiler": "^22.2.0",
+    "@angular/core": "^22.2.0",
+    "@angular/forms": "^22.2.0",
+    "@angular/material": "^22.3.0",
+    "@angular/platform-browser": "^22.2.0",
+    "@angular/router": "^22.2.0",
+    "@kata/shared": "workspace:*",
+    "rxjs": "~7.8.0",
+    "socket.io-client": "^4.8.4",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^22.2.8",
+    "@angular/cli": "^22.2.8",
+    "@angular/compiler-cli": "^22.2.0",
+    "jsdom": "^30.0.0",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.0"
+  },
+  "description": "SPA Angular de Flight Booking Realtime."
+}

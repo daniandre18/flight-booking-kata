@@ -1,0 +1,19 @@
+packages:
+  - shared
+  - backend
+  - frontend
+
+# pnpm 10 bloquea los scripts de instalación por defecto.
+# Se permiten solo los de Prisma (descargan el motor de migraciones).
+onlyBuiltDependencies:
+  - '@prisma/engines'
+  - prisma
+# Angular funciona sin estos scripts (binarios por dependencias opcionales); se ignoran sin aviso.
+ignoredBuiltDependencies:
+  - '@parcel/watcher'
+  - esbuild
+  - lmdb
+  - msgpackr-extract
+  - cpu-features
+  - protobufjs
+  - ssh2
