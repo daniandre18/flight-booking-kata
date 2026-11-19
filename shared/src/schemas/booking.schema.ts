@@ -9,6 +9,9 @@ export const DECLINED_TEST_CARD = '4000000000000002';
 
 export const MAX_PASSENGERS_PER_BOOKING = 4;
 
+/** Header `Idempotency-Key` de `POST /bookings`: un UUID que el frontend genera al abrir el pago. */
+export const IdempotencyKeySchema = z.uuid();
+
 const PersonNameSchema = z.string().trim().min(2).max(100);
 
 /** `true` si la tarjeta `MM/YY` vence en el mes actual o después. */

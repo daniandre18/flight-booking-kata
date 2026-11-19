@@ -10,6 +10,7 @@ import {
   FLIGHT_WRITE_CONTEXT,
   type FlightWriteContext,
 } from '../../../src/shared-kernel/application/flight-write-context';
+import { RealtimeModule } from '../../../src/realtime/realtime.module';
 import { ConfigModule } from '../../../src/shared-kernel/infrastructure/config';
 import { SharedKernelModule } from '../../../src/shared-kernel/shared-kernel.module';
 
@@ -17,7 +18,7 @@ describe('FlightWriteContext', () => {
   it('el módulo resuelve el contexto con sus seis dependencias', async () => {
     Object.assign(process.env, { DATABASE_URL: 'postgresql://u:p@localhost:1/db', ADMIN_KEY: 'k' });
     const moduleRef = await Test.createTestingModule({
-      imports: [ConfigModule, EventEmitterModule.forRoot(), SharedKernelModule],
+      imports: [ConfigModule, EventEmitterModule.forRoot(), SharedKernelModule, RealtimeModule],
     }).compile();
     const context = moduleRef.get<FlightWriteContext>(FLIGHT_WRITE_CONTEXT);
     expect(Object.keys(context).sort()).toEqual(

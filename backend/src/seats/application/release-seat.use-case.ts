@@ -7,6 +7,7 @@ import {
 import { DomainError } from '../../shared-kernel/domain/domain-error';
 import { requireSeatPosition } from '../domain/seat-position';
 import type { SeatHoldsPort } from './ports/seat-holds.port';
+import { seatReleasedDrafts, seatReleasedEvents } from './seat-released-events';
 
 export interface ReleaseSeatCommand {
   flightId: string;
@@ -30,23 +31,12 @@ export class ReleaseSeatUseCase {
       if (!released) {
         throw new DomainError('SEAT_NOT_HELD', 'Este asiento no está bloqueado a tu nombre');
       }
-      const payload = { seatId: command.seatCode, status: 'AVAILABLE', reason: 'MANUAL' };
-      const draft = {
-        type: 'SEAT_RELEASED' as const,
-        seatCode: command.seatCode,
-        payload,
-        occurredAt: now,
-      };
-      return recordFlightChange(this.context, command.flightId, [draft]);
+      const drafts = seatReleasedDrafts([command.seatCode], 'MANUAL', now);
+      return recordFlightChange(this.context, command.flightId, drafts);
     });
-    const seatEvents = outcome.events.map((event) => ({
-      type: 'SeatReleased' as const,
-      flightId: command.flightId,
-      seq: event.seq,
-      occurredAt: now,
-      seatCode: command.seatCode,
-      reason: 'MANUAL' as const,
-    }));
-    this.context.publisher.publish([...seatEvents, ...statsChangedEvent(outcome.summary, now)]);
+    this.context.publisher.publish([
+      ...seatReleasedEvents(outcome.events, 'MANUAL'),
+      ...statsChangedEvent(outcome.summary, now),
+    ]);
   }
 }

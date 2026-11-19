@@ -1,5 +1,11 @@
 import { allSeatPositions, formatSeatCode, type SeatStatus } from '@kata/shared';
 import type {
+  BookedSeat,
+  MarkBookedRequest,
+  MarkBookedResult,
+  SeatBookingPort,
+} from '../../src/seats/application/ports/seat-booking.port';
+import type {
   ClientHoldSummary,
   SeatHoldTarget,
   SeatHoldsPort,
@@ -9,11 +15,13 @@ import type {
   SeatQueryPort,
   SeatView,
 } from '../../src/seats/application/ports/seat-query.port';
+import type { SeatReleasePort } from '../../src/seats/application/ports/seat-release.port';
 import { isHoldExpired } from '../../src/seats/domain/hold-policy';
 import { holderTagOf } from '../../src/shared-kernel/domain/holder-tag';
 import type { Transactional } from './shared-kernel.doubles';
 
 interface StoredSeat {
+  id: string;
   flightId: string;
   row: number;
   letter: SeatView['letter'];
@@ -26,12 +34,15 @@ interface StoredSeat {
  * Almacén de asientos en memoria con las mismas reglas atómicas que los adaptadores Prisma:
  * vista perezosa de vencimientos y UPDATE condicional simulado. Participa en el rollback.
  */
-export class InMemorySeatStore implements SeatHoldsPort, SeatQueryPort, Transactional {
+export class InMemorySeatStore
+  implements SeatHoldsPort, SeatQueryPort, SeatBookingPort, SeatReleasePort, Transactional
+{
   private seats = new Map<string, StoredSeat>();
 
   addFlight(flightId: string): void {
     for (const { row, letter } of allSeatPositions()) {
       this.seats.set(key(flightId, formatSeatCode(row, letter)), {
+        id: seatIdOf(flightId, formatSeatCode(row, letter)),
         flightId,
         row,
         letter,
@@ -110,12 +121,55 @@ export class InMemorySeatStore implements SeatHoldsPort, SeatQueryPort, Transact
     return Promise.resolve([...groups.values()]);
   }
 
+  markBooked(request: MarkBookedRequest): Promise<MarkBookedResult> {
+    const booked: BookedSeat[] = [];
+    for (const position of request.seats) {
+      const seat = this.seat(request.flightId, formatSeatCode(position.row, position.letter));
+      const owned =
+        seat.status === 'HELD' && seat.heldBy === request.clientId && !isExpired(seat, request.now);
+      if (owned) {
+        Object.assign(seat, { status: 'BOOKED', heldBy: null, holdExpiresAt: null });
+        booked.push({ id: seat.id, row: seat.row, letter: seat.letter });
+      }
+    }
+    const remainingActiveHolds = this.activeHolds(request.clientId, request.now).filter(
+      (seat) => seat.flightId === request.flightId,
+    ).length;
+    return Promise.resolve({ booked, remainingActiveHolds });
+  }
+
+  findFlightsWithExpiredHolds(now: Date): Promise<string[]> {
+    const flights = [...this.seats.values()]
+      .filter((seat) => seat.status === 'HELD' && isExpired(seat, now))
+      .map((seat) => seat.flightId);
+    return Promise.resolve([...new Set(flights)]);
+  }
+
+  releaseExpired(flightId: string, now: Date): Promise<string[]> {
+    return Promise.resolve(this.release(flightId, (seat) => isExpired(seat, now)));
+  }
+
+  releaseAllHeld(flightId: string): Promise<string[]> {
+    return Promise.resolve(this.release(flightId, () => true));
+  }
+
   snapshot(): unknown {
     return new Map([...this.seats].map(([id, seat]) => [id, { ...seat }]));
   }
 
   restore(state: unknown): void {
     this.seats = state as Map<string, StoredSeat>;
+  }
+
+  private release(flightId: string, matches: (seat: StoredSeat) => boolean): string[] {
+    const released: string[] = [];
+    for (const seat of this.seats.values()) {
+      if (seat.flightId === flightId && seat.status === 'HELD' && matches(seat)) {
+        Object.assign(seat, { status: 'AVAILABLE', heldBy: null, holdExpiresAt: null });
+        released.push(formatSeatCode(seat.row, seat.letter));
+      }
+    }
+    return released;
   }
 
   private activeHolds(clientId: string, now: Date): StoredSeat[] {
@@ -127,6 +181,11 @@ export class InMemorySeatStore implements SeatHoldsPort, SeatQueryPort, Transact
 
 function key(flightId: string, seatCode: string): string {
   return `${flightId}:${seatCode}`;
+}
+
+/** Id determinista de la fila del asiento en el doble (en la base es un UUID). */
+export function seatIdOf(flightId: string, seatCode: string): string {
+  return `seat:${flightId}:${seatCode}`;
 }
 
 function isExpired(seat: StoredSeat, now: Date): boolean {

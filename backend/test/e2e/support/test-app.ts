@@ -3,6 +3,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { allSeatPositions, type AirportCode, type FlightStatus } from '@kata/shared';
 import { randomUUID } from 'node:crypto';
+import type { AddressInfo } from 'node:net';
 import { AppModule } from '../../../src/app.module';
 import { configureApp } from '../../../src/app.setup';
 import { CLOCK } from '../../../src/shared-kernel/domain/clock';
@@ -31,6 +32,13 @@ export interface FlightOverrides {
 
 export interface TestAppOptions {
   clock?: FakeClock;
+  /**
+   * Usa el reloj del sistema en la app. `clock` queda fijo en el instante de arranque y solo
+   * sirve para las fechas por defecto de `createFlight`.
+   */
+  realClock?: boolean;
+  /** Vacía la base al arrancar (por defecto). `false` simula un reinicio con datos previos. */
+  resetOnStart?: boolean;
   /** Controladores extra solo para la prueba (por ejemplo, sondas del throttler). */
   controllers?: Type[];
   /** Variables de entorno que sobrescriben las del arnés. */
@@ -45,12 +53,14 @@ export interface TestApp {
   createFlight(overrides?: FlightOverrides): Promise<string>;
   /** Vacía todas las tablas de negocio y vuelve a crear los aeropuertos. */
   reset(): Promise<void>;
+  /** Escucha en un puerto libre (necesario para Socket.io) y devuelve la URL base. */
+  listen(): Promise<string>;
   close(): Promise<void>;
 }
 
 /** Arranca la app completa contra la base de prueba con el reloj reemplazado por FakeClock. */
 export async function createTestApp(options: TestAppOptions = {}): Promise<TestApp> {
-  const clock = options.clock ?? new FakeClock();
+  const clock = options.clock ?? new FakeClock(options.realClock ? new Date() : undefined);
   const databaseUrl = process.env.TEST_DATABASE_URL;
   if (databaseUrl === undefined) {
     throw new Error('TEST_DATABASE_URL no está definida (la define global-setup)');
@@ -63,16 +73,20 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     LOG_LEVEL: process.env.E2E_LOG_LEVEL ?? 'silent',
     // Los límites de solicitudes se relajan salvo en las pruebas que los verifican.
     RATE_LIMIT_MULTIPLIER: '100',
+    HOLD_TTL_SECONDS: '600',
+    // El barrido periódico no corre durante las pruebas (se dispara a mano con FakeClock); la
+    // pasada de arranque sí. Las pruebas de expiración con reloj real lo bajan a 2000 ms.
+    HOLD_SWEEP_INTERVAL_MS: '3600000',
     ...options.env,
   });
 
-  const moduleRef = await Test.createTestingModule({
+  const builder = Test.createTestingModule({
     imports: [AppModule],
     controllers: options.controllers ?? [],
-  })
-    .overrideProvider(CLOCK)
-    .useValue(clock)
-    .compile();
+  });
+  const moduleRef = await (
+    options.realClock ? builder : builder.overrideProvider(CLOCK).useValue(clock)
+  ).compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>({ bufferLogs: true });
   configureApp(app);
   await app.init();
@@ -108,6 +122,14 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     return id;
   };
 
-  await reset();
-  return { app, clock, prisma, createFlight, reset, close: () => app.close() };
+  const listen = async (): Promise<string> => {
+    await app.listen(0, '127.0.0.1');
+    const address = app.getHttpServer().address() as AddressInfo;
+    return `http://127.0.0.1:${address.port}`;
+  };
+
+  if (options.resetOnStart ?? true) {
+    await reset();
+  }
+  return { app, clock, prisma, createFlight, reset, listen, close: () => app.close() };
 }

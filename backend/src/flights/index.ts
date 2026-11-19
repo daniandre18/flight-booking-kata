@@ -2,6 +2,7 @@
  * API pública del módulo flights: lo único que otros módulos pueden importar (principio IV).
  */
 export { toFlightDto } from './application/flight-dto.mapper';
+export { isDelayed } from './domain/flight';
 export {
   FLIGHT_QUERY_PORT,
   type FlightQueryPort,

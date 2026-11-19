@@ -24,6 +24,13 @@ export async function recordFlightChange(
   return { events, summary };
 }
 
+/** Evento registrado de un asiento (los de vuelo no llevan `seatCode`). */
+export type RecordedSeatEvent = RecordedFlightEvent & { seatCode: string };
+
+export function isSeatEvent(event: RecordedFlightEvent): event is RecordedSeatEvent {
+  return event.seatCode !== null;
+}
+
 /** Evento de resumen para el room `search` (uno por transacción, research.md §13). */
 export function statsChangedEvent(
   summary: FlightSummary | null,

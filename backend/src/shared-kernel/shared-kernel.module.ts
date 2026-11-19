@@ -1,5 +1,4 @@
 import { Global, Module } from '@nestjs/common';
-import { EventEmitterPublisher } from '../realtime/infrastructure/event-emitter.publisher';
 import { EVENT_PUBLISHER, type EventPublisher } from './application/event-publisher';
 import { FLIGHT_EVENT_LOG, type FlightEventLog } from './application/flight-event-log.port';
 import {
@@ -33,7 +32,10 @@ function buildFlightWriteContext(
   return { uow, writeLock, eventLog, statsReader, publisher, clock };
 }
 
-/** Puertos transversales (reloj, unidad de trabajo, primitivas por vuelo y publicación). */
+/**
+ * Puertos transversales (reloj, unidad de trabajo y primitivas por vuelo). `EVENT_PUBLISHER` lo
+ * provee el módulo global `RealtimeModule`: el shared-kernel solo depende del token del puerto.
+ */
 @Global()
 @Module({
   providers: [
@@ -44,7 +46,6 @@ function buildFlightWriteContext(
     { provide: FLIGHT_WRITE_LOCK, useClass: PrismaFlightWriteLock },
     { provide: FLIGHT_EVENT_LOG, useClass: PrismaFlightEventLog },
     { provide: FLIGHT_STATS_READER, useClass: PrismaFlightStatsReader },
-    { provide: EVENT_PUBLISHER, useClass: EventEmitterPublisher },
     {
       provide: FLIGHT_WRITE_CONTEXT,
       useFactory: buildFlightWriteContext,
@@ -66,7 +67,6 @@ function buildFlightWriteContext(
     FLIGHT_WRITE_LOCK,
     FLIGHT_EVENT_LOG,
     FLIGHT_STATS_READER,
-    EVENT_PUBLISHER,
     FLIGHT_WRITE_CONTEXT,
   ],
 })

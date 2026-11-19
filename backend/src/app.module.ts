@@ -3,8 +3,10 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { BookingsModule } from './bookings';
 import { FlightsModule } from './flights';
 import { HealthModule } from './health/health.module';
+import { RealtimeModule } from './realtime/realtime.module';
 import { SeatsModule } from './seats';
 import { SharedKernelModule } from './shared-kernel/shared-kernel.module';
 import { ConfigModule } from './shared-kernel/infrastructure/config';
@@ -24,8 +26,10 @@ import { AppLoggerModule } from './shared-kernel/infrastructure/logger.module';
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot(buildThrottlerOptions()),
     SharedKernelModule,
+    RealtimeModule,
     FlightsModule,
     SeatsModule,
+    BookingsModule,
     HealthModule,
   ],
   providers: [
