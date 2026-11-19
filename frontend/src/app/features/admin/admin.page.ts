@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   inject,
   input,
   linkedSignal,
@@ -25,7 +26,7 @@ import { IconComponent } from '../../shared/ui/icon.component';
 const KEY_STORAGE = 'kata.adminKey';
 type Action = 'DELAYED' | 'CANCELLED';
 
-/** Las 20 rutas dirigidas disponibles; el panel permite escoger cualquiera para la fecha elegida. */
+/** Todas las rutas dirigidas disponibles; el panel permite escoger cualquiera para la fecha elegida. */
 const OPERATIONS_ROUTES: ReadonlyArray<Pick<SearchFlightsQuery, 'origin' | 'destination'>> =
   AIRPORT_CODES.flatMap((origin) =>
     AIRPORT_CODES.filter((destination) => destination !== origin).map((destination) => ({
@@ -35,6 +36,7 @@ const OPERATIONS_ROUTES: ReadonlyArray<Pick<SearchFlightsQuery, 'origin' | 'dest
   );
 
 const DEFAULT_OPERATIONS_DATE = (): string => toBogotaDate(new Date(Date.now() + 86_400_000));
+const FLIGHTS_PER_PAGE = 12;
 
 function readKey(): string {
   try {
@@ -65,164 +67,7 @@ const bogotaToIso = (local: string): string =>
   imports: [IconComponent, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './admin.page.html',
-  styles: `
-    :host {
-      display: block;
-      max-width: 1100px;
-      margin: 0 auto;
-    }
-    .operations-layout {
-      display: grid;
-      grid-template-columns: minmax(0, 45fr) minmax(0, 55fr);
-      gap: var(--space-6);
-      align-items: start;
-    }
-    .page-title {
-      display: flex;
-      align-items: center;
-      gap: var(--space-3);
-      margin-bottom: var(--space-2);
-    }
-    .title-icon {
-      display: grid;
-      width: 2.5rem;
-      height: 2.5rem;
-      place-items: center;
-      border-radius: var(--radius-md);
-      color: var(--color-primary);
-      background: var(--color-info-bg);
-    }
-    .restricted {
-      display: inline-flex;
-      gap: var(--space-1);
-      align-items: center;
-      padding: 0.2rem var(--space-2);
-      border-radius: 999px;
-      color: var(--color-danger-fg);
-      background: var(--color-danger-bg);
-      font-size: var(--font-size-sm);
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-    .operations-card,
-    .flights-panel {
-      padding: var(--space-6);
-      border: 1px solid rgb(15 23 42 / 0.08);
-      border-radius: var(--radius-lg);
-      background: var(--color-surface);
-      box-shadow: var(--shadow-1);
-    }
-    .panel-heading {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: var(--space-3);
-      margin-bottom: var(--space-4);
-    }
-    .panel-heading h3 { margin: 0; }
-    .field-control {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      width: 100%;
-      box-sizing: border-box;
-      padding: 0 var(--space-3);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface);
-    }
-    .field-control:focus-within {
-      border-color: var(--color-primary);
-      box-shadow: 0 0 0 4px rgb(11 87 208 / 0.18);
-    }
-    .field-control app-icon { color: var(--color-text-muted); }
-    .field-control input {
-      flex: 1;
-      width: 100%;
-      min-width: 0;
-      padding-inline: 0;
-      border: 0;
-      outline: 0;
-    }
-    .icon-button {
-      display: inline-grid;
-      width: 2.25rem;
-      height: 2.25rem;
-      place-items: center;
-      padding: 0;
-      border: 0;
-      border-radius: var(--radius-sm);
-      color: var(--color-text-muted);
-      background: transparent;
-      cursor: pointer;
-    }
-    .icon-button:hover { color: var(--color-primary); background: var(--color-info-bg); }
-    fieldset { border: 0; padding: 0; margin: 0 0 var(--space-4); }
-    legend { margin-bottom: var(--space-2); font-weight: 700; }
-    .action-options { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .action-option {
-      display: grid;
-      gap: var(--space-1);
-      min-height: 7rem;
-      padding: var(--space-4);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md);
-      color: var(--color-text);
-      background: var(--color-surface);
-      text-align: left;
-      cursor: pointer;
-    }
-    .action-option app-icon { align-self: start; }
-    .action-option strong { font-size: var(--font-size-md); }
-    .action-option span { color: var(--color-text-muted); font-size: var(--font-size-sm); }
-    .action-delay[aria-pressed='true'] {
-      border-color: #d97706;
-      color: #92400e;
-      background: var(--color-warning-bg);
-      box-shadow: inset 0 0 0 1px #d97706;
-    }
-    .action-cancel[aria-pressed='true'] {
-      border-color: var(--color-danger-fg);
-      color: var(--color-danger-fg);
-      background: var(--color-danger-bg);
-      box-shadow: inset 0 0 0 1px var(--color-danger-fg);
-    }
-    .submit-action { width: 100%; }
-    .submit-delay { border-color: #b45309; background: #b45309; }
-    .submit-delay:hover:not(:disabled) { background: #92400e; }
-    .dashboard-link { display: inline-block; margin-top: var(--space-2); font-weight: 700; }
-    .flight-list { display: grid; gap: var(--space-2); }
-    .flight-row {
-      display: grid;
-      grid-template-columns: auto 1fr auto;
-      gap: var(--space-3);
-      align-items: center;
-      width: 100%;
-      padding: var(--space-3);
-      border: 1px solid transparent;
-      border-radius: var(--radius-md);
-      color: inherit;
-      background: var(--color-bg);
-      text-align: left;
-      cursor: pointer;
-    }
-    .flight-row:hover { border-color: var(--color-primary); background: var(--color-info-bg); }
-    .flight-row.selected { border-color: var(--color-primary); background: var(--color-info-bg); box-shadow: inset 0 0 0 1px var(--color-primary); }
-    .flight-code { font-family: ui-monospace, monospace; font-weight: 800; }
-    .flight-route { display: block; font-weight: 700; }
-    .flight-meta { display: block; color: var(--color-text-muted); font-size: var(--font-size-sm); }
-    .status { justify-self: end; white-space: nowrap; }
-    @media (max-width: 800px) {
-      .operations-layout { grid-template-columns: 1fr; }
-    }
-    @media (max-width: 420px) {
-      .operations-card, .flights-panel { padding: var(--space-4); }
-      .action-options { grid-template-columns: 1fr; }
-      .flight-row { grid-template-columns: 1fr auto; }
-      .flight-code { grid-column: 1 / -1; }
-    }
-  `,
+  styleUrl: './admin.page.scss',
 })
 export class AdminPage implements OnInit {
   readonly flight = input<string>();
@@ -236,6 +81,7 @@ export class AdminPage implements OnInit {
   protected readonly current = signal<FlightDto | null>(null);
   protected readonly operationFlights = signal<FlightDto[]>([]);
   protected readonly operationDate = signal(DEFAULT_OPERATIONS_DATE());
+  protected readonly operationPage = signal(1);
   protected readonly loadingFlights = signal(false);
   protected readonly flightsError = signal(false);
   protected readonly busy = signal(false);
@@ -245,6 +91,14 @@ export class AdminPage implements OnInit {
   protected readonly statusLabel = FLIGHT_STATUS_LABEL;
   protected readonly time = formatTime;
   protected readonly date = formatDate;
+  protected readonly pageSize = FLIGHTS_PER_PAGE;
+  protected readonly operationPageCount = computed(() =>
+    Math.max(1, Math.ceil(this.operationFlights().length / this.pageSize)),
+  );
+  protected readonly pagedOperationFlights = computed(() => {
+    const start = (this.operationPage() - 1) * this.pageSize;
+    return this.operationFlights().slice(start, start + this.pageSize);
+  });
 
   ngOnInit(): void {
     void this.loadFlight();
@@ -281,7 +135,16 @@ export class AdminPage implements OnInit {
 
   protected setOperationDate(event: Event): void {
     this.operationDate.set(this.value(event));
+    this.operationPage.set(1);
     void this.loadOperationFlights();
+  }
+
+  protected previousOperationPage(): void {
+    this.operationPage.update((page) => Math.max(1, page - 1));
+  }
+
+  protected nextOperationPage(): void {
+    this.operationPage.update((page) => Math.min(this.operationPageCount(), page + 1));
   }
 
   protected async loadOperationFlights(): Promise<void> {
@@ -298,6 +161,7 @@ export class AdminPage implements OnInit {
             .flat()
             .sort((left, right) => left.departureAt.localeCompare(right.departureAt)),
         );
+        this.operationPage.set(1);
       }
     } catch {
       if (date === this.operationDate()) {

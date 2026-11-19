@@ -43,14 +43,25 @@ describe('AdminPage', () => {
 
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
-  it('muestra todas las rutas del día y carga el ID al seleccionar uno', () => {
+  it('muestra la primera página de todas las rutas del día y carga el ID al seleccionar uno', () => {
     const rows = host().querySelectorAll('.flight-row');
-    expect(api.searchFlights).toHaveBeenCalledTimes(20);
-    expect(rows).toHaveLength(20);
+    expect(api.searchFlights).toHaveBeenCalledTimes(72);
+    expect(rows).toHaveLength(12);
+    expect(host().textContent).toContain('72 vuelos disponibles para selección');
     (rows[0] as HTMLButtonElement).click();
     fixture.detectChanges();
     expect((host().querySelector('#admin-flight') as HTMLInputElement).value).toBe(FLIGHT.id);
     expect(host().querySelector('.flight-row.selected')?.textContent).toContain('KT1002');
+  });
+
+  it('pagina los vuelos operativos cuando hay más de doce', () => {
+    const next = [...host().querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === 'Siguiente',
+    ) as HTMLButtonElement;
+    expect(host().textContent).toContain('Página 1 de 6');
+    next.click();
+    fixture.detectChanges();
+    expect(host().textContent).toContain('Página 2 de 6');
   });
 
   it('cambia entre retrasar y cancelar con tarjetas de acción', () => {

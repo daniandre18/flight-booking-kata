@@ -18,6 +18,10 @@ const AIRPORTS: Record<AirportCode, string> = {
   CLO: 'Cali',
   CTG: 'Cartagena',
   BAQ: 'Barranquilla',
+  PEI: 'Pereira',
+  SMR: 'Santa Marta',
+  BGA: 'Bucaramanga',
+  ADZ: 'San Andrés',
 };
 
 export interface FlightOverrides {

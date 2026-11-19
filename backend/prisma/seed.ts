@@ -1,7 +1,7 @@
 /**
  * Seed determinista (research.md §22).
- * - 5 aeropuertos, 20 rutas dirigidas, 3 vuelos diarios por ruta durante 14 días desde hoy
- *   (Bogotá): 840 vuelos de 180 asientos.
+ * - 9 aeropuertos, 72 rutas dirigidas, 3 vuelos diarios por ruta durante 14 días desde hoy
+ *   (Bogotá): 3.024 vuelos de 180 asientos.
  * - Un vuelo casi lleno (1 asiento libre) cuyos 179 asientos BOOKED pertenecen a reservas reales
  *   agrupadas de a 4 (44 de 4 y 1 de 3).
  * Mismo día → mismos datos: PRNG con semilla fija e identificadores UUID v5.
@@ -35,6 +35,10 @@ const AIRPORTS: Record<AirportCode, string> = {
   CLO: 'Cali',
   CTG: 'Cartagena',
   BAQ: 'Barranquilla',
+  PEI: 'Pereira',
+  SMR: 'Santa Marta',
+  BGA: 'Bucaramanga',
+  ADZ: 'San Andrés',
 };
 
 /**
@@ -42,9 +46,20 @@ const AIRPORTS: Record<AirportCode, string> = {
  * La clave lleva los códigos en orden alfabético.
  */
 const ROUTE_PROFILE: Record<string, { minutes: number; baseFare: number }> = {
+  'ADZ-BAQ': { minutes: 90, baseFare: 360_000 },
+  'ADZ-BGA': { minutes: 115, baseFare: 420_000 },
+  'ADZ-BOG': { minutes: 125, baseFare: 460_000 },
+  'ADZ-CLO': { minutes: 150, baseFare: 520_000 },
+  'ADZ-CTG': { minutes: 75, baseFare: 310_000 },
+  'ADZ-MDE': { minutes: 130, baseFare: 480_000 },
+  'ADZ-PEI': { minutes: 145, baseFare: 500_000 },
+  'ADZ-SMR': { minutes: 100, baseFare: 380_000 },
+  'BAQ-BGA': { minutes: 70, baseFare: 240_000 },
   'BOG-MDE': { minutes: 55, baseFare: 210_000 },
   'BOG-CLO': { minutes: 60, baseFare: 230_000 },
   'BOG-CTG': { minutes: 85, baseFare: 320_000 },
+  'BOG-PEI': { minutes: 45, baseFare: 180_000 },
+  'BOG-SMR': { minutes: 95, baseFare: 350_000 },
   'BAQ-BOG': { minutes: 90, baseFare: 310_000 },
   'CLO-MDE': { minutes: 60, baseFare: 220_000 },
   'CTG-MDE': { minutes: 70, baseFare: 260_000 },
@@ -52,6 +67,21 @@ const ROUTE_PROFILE: Record<string, { minutes: number; baseFare: number }> = {
   'CLO-CTG': { minutes: 100, baseFare: 340_000 },
   'BAQ-CLO': { minutes: 100, baseFare: 335_000 },
   'BAQ-CTG': { minutes: 40, baseFare: 160_000 },
+  'BAQ-PEI': { minutes: 85, baseFare: 290_000 },
+  'BAQ-SMR': { minutes: 40, baseFare: 150_000 },
+  'BGA-BOG': { minutes: 55, baseFare: 210_000 },
+  'BGA-CLO': { minutes: 85, baseFare: 285_000 },
+  'BGA-CTG': { minutes: 100, baseFare: 340_000 },
+  'BGA-MDE': { minutes: 60, baseFare: 225_000 },
+  'BGA-PEI': { minutes: 55, baseFare: 215_000 },
+  'BGA-SMR': { minutes: 80, baseFare: 275_000 },
+  'CLO-PEI': { minutes: 45, baseFare: 170_000 },
+  'CLO-SMR': { minutes: 115, baseFare: 390_000 },
+  'CTG-PEI': { minutes: 95, baseFare: 330_000 },
+  'CTG-SMR': { minutes: 45, baseFare: 170_000 },
+  'MDE-PEI': { minutes: 35, baseFare: 150_000 },
+  'MDE-SMR': { minutes: 85, baseFare: 300_000 },
+  'PEI-SMR': { minutes: 95, baseFare: 340_000 },
 };
 
 /** Horas locales de salida (Bogotá). */

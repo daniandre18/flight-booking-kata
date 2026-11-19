@@ -57,5 +57,5 @@ export const CardBrand = {
 } as const;
 export type CardBrand = (typeof CardBrand)[keyof typeof CardBrand];
 
-export const AIRPORT_CODES = ['BOG', 'MDE', 'CLO', 'CTG', 'BAQ'] as const;
+export const AIRPORT_CODES = ['BOG', 'MDE', 'CLO', 'CTG', 'BAQ', 'PEI', 'SMR', 'BGA', 'ADZ'] as const;
 export type AirportCode = (typeof AIRPORT_CODES)[number];

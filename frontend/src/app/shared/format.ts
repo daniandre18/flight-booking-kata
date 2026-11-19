@@ -97,4 +97,8 @@ export const AIRPORT_LABEL = {
   CLO: 'Cali (CLO)',
   CTG: 'Cartagena (CTG)',
   BAQ: 'Barranquilla (BAQ)',
+  PEI: 'Pereira (PEI)',
+  SMR: 'Santa Marta (SMR)',
+  BGA: 'Bucaramanga (BGA)',
+  ADZ: 'San Andrés (ADZ)',
 } as const;

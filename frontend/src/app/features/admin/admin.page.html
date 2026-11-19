@@ -154,7 +154,7 @@
       <p class="notice notice-danger" role="alert">No pudimos cargar los vuelos operativos.</p>
     } @else {
       <div class="flight-list">
-        @for (flight of operationFlights(); track flight.id) {
+        @for (flight of pagedOperationFlights(); track flight.id) {
           <button
             class="flight-row"
             type="button"
@@ -175,6 +175,29 @@
           <p class="field-hint">No hay vuelos operativos para mostrar.</p>
         }
       </div>
+      @if (operationFlights().length > pageSize) {
+        <nav class="pagination" aria-label="Paginación de vuelos operativos">
+          <button
+            class="pagination-button"
+            type="button"
+            [disabled]="operationPage() === 1"
+            (click)="previousOperationPage()"
+          >
+            Anterior
+          </button>
+          <span class="pagination-status" aria-live="polite">
+            Página {{ operationPage() }} de {{ operationPageCount() }}
+          </span>
+          <button
+            class="pagination-button"
+            type="button"
+            [disabled]="operationPage() === operationPageCount()"
+            (click)="nextOperationPage()"
+          >
+            Siguiente
+          </button>
+        </nav>
+      }
     }
   </section>
 </div>

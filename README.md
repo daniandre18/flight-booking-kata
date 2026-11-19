@@ -98,7 +98,7 @@ pnpm dev                        # api en :3000 y web en :4200 (proxy de /api, /h
 7. En **Administración** (`/admin`), retrasa o cancela un vuelo. La clave de la demo es
    `demo-admin-key` (variable `ADMIN_KEY`).
 
-El seed crea 5 aeropuertos, 20 rutas, 420 vuelos (3 diarios durante 7 días) y 75.600 asientos.
+El seed crea 9 aeropuertos, 72 rutas, 3.024 vuelos (3 diarios durante 14 días) y 544.320 asientos.
 También crea un vuelo BOG → MDE de mañana con un solo asiento libre (30F) para probar AGOTADO,
 y 45 reservas reales. El log del seed imprime ese vuelo y una reserva de ejemplo con su correo.
 
