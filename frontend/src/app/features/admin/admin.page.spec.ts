@@ -36,15 +36,17 @@ describe('AdminPage', () => {
     }).compileComponents();
     fixture = TestBed.createComponent(AdminPage);
     fixture.detectChanges();
+    api.searchFlights.mockClear();
     await fixture.componentInstance['loadOperationFlights']();
     fixture.detectChanges();
   });
 
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
-  it('muestra los vuelos operativos y carga el ID al seleccionar uno', () => {
+  it('muestra todas las rutas del día y carga el ID al seleccionar uno', () => {
     const rows = host().querySelectorAll('.flight-row');
-    expect(rows).toHaveLength(3);
+    expect(api.searchFlights).toHaveBeenCalledTimes(20);
+    expect(rows).toHaveLength(20);
     (rows[0] as HTMLButtonElement).click();
     fixture.detectChanges();
     expect((host().querySelector('#admin-flight') as HTMLInputElement).value).toBe(FLIGHT.id);

@@ -127,12 +127,25 @@
   <section class="flights-panel" aria-labelledby="active-flights-title">
     <div class="panel-heading">
       <div>
-        <h3 id="active-flights-title">Vuelos activos</h3>
-        <p class="field-hint">Selecciona uno para cargarlo en el control.</p>
+        <h3 id="active-flights-title">Vuelos del día</h3>
+        <p class="field-hint">Todas las rutas están disponibles para selección.</p>
       </div>
       <button class="icon-button" type="button" aria-label="Actualizar vuelos" (click)="loadOperationFlights()">
         <app-icon name="clock" [size]="20" />
       </button>
+    </div>
+
+    <div class="field">
+      <label for="operations-date">Fecha operativa</label>
+      <input
+        id="operations-date"
+        type="date"
+        [value]="operationDate()"
+        (change)="setOperationDate($event)"
+      />
+      <span class="field-hint" aria-live="polite">
+        {{ operationFlights().length }} vuelos disponibles para selección.
+      </span>
     </div>
 
     @if (loadingFlights()) {

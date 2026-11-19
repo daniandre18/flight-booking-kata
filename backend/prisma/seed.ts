@@ -1,7 +1,7 @@
 /**
  * Seed determinista (research.md §22).
- * - 5 aeropuertos, 20 rutas dirigidas, 3 vuelos diarios por ruta durante 7 días desde hoy
- *   (Bogotá): 420 vuelos de 180 asientos.
+ * - 5 aeropuertos, 20 rutas dirigidas, 3 vuelos diarios por ruta durante 14 días desde hoy
+ *   (Bogotá): 840 vuelos de 180 asientos.
  * - Un vuelo casi lleno (1 asiento libre) cuyos 179 asientos BOOKED pertenecen a reservas reales
  *   agrupadas de a 4 (44 de 4 y 1 de 3).
  * Mismo día → mismos datos: PRNG con semilla fija e identificadores UUID v5.
@@ -25,7 +25,7 @@ loadEnv({ path: [resolve(process.cwd(), '.env'), resolve(process.cwd(), '../.env
 
 const SEED_NAMESPACE = '6f1d3c2a-8b4e-4f5a-9c7d-1e2f3a4b5c6d';
 const PRNG_SEED = 20261118;
-const DAYS = 7;
+const DAYS = 14;
 const BOGOTA_UTC_OFFSET_HOURS = 5;
 const SEAT_CHUNK = 5_000;
 

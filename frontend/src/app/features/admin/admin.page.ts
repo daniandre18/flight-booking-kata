@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import {
+  AIRPORT_CODES,
   FlightParamsSchema,
   UpdateFlightStatusRequestSchema,
   toBogotaDate,
@@ -24,11 +25,16 @@ import { IconComponent } from '../../shared/ui/icon.component';
 const KEY_STORAGE = 'kata.adminKey';
 type Action = 'DELAYED' | 'CANCELLED';
 
-const OPERATIONS_ROUTES = [
-  { origin: 'BOG', destination: 'MDE' },
-  { origin: 'CTG', destination: 'CLO' },
-  { origin: 'MDE', destination: 'BOG' },
-] satisfies ReadonlyArray<Pick<SearchFlightsQuery, 'origin' | 'destination'>>;
+/** Las 20 rutas dirigidas disponibles; el panel permite escoger cualquiera para la fecha elegida. */
+const OPERATIONS_ROUTES: ReadonlyArray<Pick<SearchFlightsQuery, 'origin' | 'destination'>> =
+  AIRPORT_CODES.flatMap((origin) =>
+    AIRPORT_CODES.filter((destination) => destination !== origin).map((destination) => ({
+      origin,
+      destination,
+    })),
+  );
+
+const DEFAULT_OPERATIONS_DATE = (): string => toBogotaDate(new Date(Date.now() + 86_400_000));
 
 function readKey(): string {
   try {
@@ -229,6 +235,7 @@ export class AdminPage implements OnInit {
   protected readonly showKey = signal(false);
   protected readonly current = signal<FlightDto | null>(null);
   protected readonly operationFlights = signal<FlightDto[]>([]);
+  protected readonly operationDate = signal(DEFAULT_OPERATIONS_DATE());
   protected readonly loadingFlights = signal(false);
   protected readonly flightsError = signal(false);
   protected readonly busy = signal(false);
@@ -272,23 +279,34 @@ export class AdminPage implements OnInit {
     this.success.set(null);
   }
 
+  protected setOperationDate(event: Event): void {
+    this.operationDate.set(this.value(event));
+    void this.loadOperationFlights();
+  }
+
   protected async loadOperationFlights(): Promise<void> {
     this.loadingFlights.set(true);
     this.flightsError.set(false);
+    const date = this.operationDate();
     try {
-      const date = toBogotaDate(new Date());
       const groups = await Promise.all(
         OPERATIONS_ROUTES.map((route) => this.api.searchFlights({ ...route, date })),
       );
-      this.operationFlights.set(
-        groups
-          .flat()
-          .sort((left, right) => left.departureAt.localeCompare(right.departureAt)),
-      );
+      if (date === this.operationDate()) {
+        this.operationFlights.set(
+          groups
+            .flat()
+            .sort((left, right) => left.departureAt.localeCompare(right.departureAt)),
+        );
+      }
     } catch {
-      this.flightsError.set(true);
+      if (date === this.operationDate()) {
+        this.flightsError.set(true);
+      }
     } finally {
-      this.loadingFlights.set(false);
+      if (date === this.operationDate()) {
+        this.loadingFlights.set(false);
+      }
     }
   }
 
