@@ -15,5 +15,6 @@ describe('App', () => {
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('h1')?.textContent).toContain('Flight Booking Realtime');
+    expect(compiled.querySelector('app-connection-badge')?.textContent).toContain('Reconectando');
   });
 });

@@ -1,0 +1,117 @@
+<form (submit)="submit($event)" novalidate aria-label="Datos de pago">
+  <fieldset>
+    <legend>Comprador</legend>
+    <div class="field">
+      <label for="buyer-name">Nombre completo</label>
+      <input
+        id="buyer-name"
+        autocomplete="name"
+        [value]="fields().buyerName"
+        (input)="set('buyerName', $event)"
+        [attr.aria-invalid]="!!errors()['buyer.name']"
+        aria-describedby="buyer-name-error"
+      />
+      <span class="field-error" id="buyer-name-error">{{ errors()['buyer.name'] }}</span>
+    </div>
+    <div class="field">
+      <label for="buyer-email">Correo electrónico</label>
+      <input
+        id="buyer-email"
+        type="email"
+        autocomplete="email"
+        [value]="fields().buyerEmail"
+        (input)="set('buyerEmail', $event)"
+        [attr.aria-invalid]="!!errors()['buyer.email']"
+        aria-describedby="buyer-email-hint buyer-email-error"
+      />
+      <span class="field-hint" id="buyer-email-hint"
+        >Con este correo y el código podrás consultar tu boleto.</span
+      >
+      <span class="field-error" id="buyer-email-error">{{ errors()['buyer.email'] }}</span>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Pasajeros</legend>
+    @for (seatId of seatIds(); track seatId; let index = $index) {
+      <div class="field">
+        <label [for]="'passenger-' + seatId">Pasajero del asiento {{ seatId }}</label>
+        <input
+          [id]="'passenger-' + seatId"
+          autocomplete="off"
+          [value]="passengers()[seatId] ?? ''"
+          (input)="setPassenger(seatId, $event)"
+          [attr.aria-invalid]="!!passengerError(index)"
+          [attr.aria-describedby]="'passenger-' + seatId + '-error'"
+        />
+        <span class="field-error" [id]="'passenger-' + seatId + '-error'">{{
+          passengerError(index)
+        }}</span>
+      </div>
+    }
+  </fieldset>
+
+  <fieldset>
+    <legend>Tarjeta</legend>
+    <div class="field">
+      <label for="card-number">Número de tarjeta</label>
+      <input
+        id="card-number"
+        inputmode="numeric"
+        autocomplete="cc-number"
+        maxlength="19"
+        [value]="fields().cardNumber"
+        (input)="set('cardNumber', $event)"
+        [attr.aria-invalid]="!!errors()['card.number']"
+        aria-describedby="card-number-brand card-number-error"
+      />
+      <span class="field-hint" id="card-number-brand" aria-live="polite">
+        @if (brand(); as detected) {
+          Marca: <span class="brand">{{ detected }}</span>
+        }
+      </span>
+      <span class="field-error" id="card-number-error">{{ errors()['card.number'] }}</span>
+    </div>
+    <div class="card-row">
+      <div class="field">
+        <label for="card-expiry">Vencimiento (MM/AA)</label>
+        <input
+          id="card-expiry"
+          inputmode="numeric"
+          autocomplete="cc-exp"
+          placeholder="MM/AA"
+          maxlength="5"
+          [value]="fields().cardExpiry"
+          (input)="set('cardExpiry', $event)"
+          [attr.aria-invalid]="!!errors()['card.expiry']"
+          aria-describedby="card-expiry-error"
+        />
+        <span class="field-error" id="card-expiry-error">{{ errors()['card.expiry'] }}</span>
+      </div>
+      <div class="field">
+        <label for="card-cvv">Código de seguridad</label>
+        <input
+          id="card-cvv"
+          inputmode="numeric"
+          autocomplete="cc-csc"
+          maxlength="3"
+          [value]="fields().cardCvv"
+          (input)="set('cardCvv', $event)"
+          [attr.aria-invalid]="!!errors()['card.cvv']"
+          aria-describedby="card-cvv-error"
+        />
+        <span class="field-error" id="card-cvv-error">{{ errors()['card.cvv'] }}</span>
+      </div>
+    </div>
+    <p class="field-hint">Pago de prueba: la tarjeta 4000 0000 0000 0002 siempre se rechaza.</p>
+  </fieldset>
+
+  <button
+    class="btn"
+    type="submit"
+    [disabled]="processing() || disabled()"
+    [attr.aria-busy]="processing()"
+  >
+    {{ processing() ? 'Procesando el pago…' : 'Pagar' }}
+  </button>
+</form>

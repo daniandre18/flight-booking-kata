@@ -1,4 +1,32 @@
 import { type Routes } from '@angular/router';
 
-/** Cada ruta lazy se añade en la fase donde existe su página (U6). */
-export const routes: Routes = [];
+/** Rutas lazy por pantalla (plan.md: búsqueda, mapa, pago, boleto, tablero y admin). */
+export const routes: Routes = [
+  { path: '', pathMatch: 'full', redirectTo: 'search' },
+  {
+    path: 'search',
+    title: 'Buscar vuelos',
+    loadComponent: () => import('./features/search/search.page').then((m) => m.SearchPage),
+  },
+  {
+    path: 'flights/:id/seats',
+    title: 'Elegir asientos',
+    loadComponent: () => import('./features/seat-map/seat-map.page').then((m) => m.SeatMapPage),
+  },
+  {
+    path: 'checkout',
+    title: 'Pago',
+    loadComponent: () => import('./features/checkout/checkout.page').then((m) => m.CheckoutPage),
+  },
+  {
+    path: 'booking/:code',
+    title: 'Tu boleto',
+    loadComponent: () => import('./features/booking/booking.page').then((m) => m.BookingPage),
+  },
+  {
+    path: 'booking',
+    title: 'Consultar boleto',
+    loadComponent: () => import('./features/booking/booking.page').then((m) => m.BookingPage),
+  },
+  { path: '**', redirectTo: 'search' },
+];

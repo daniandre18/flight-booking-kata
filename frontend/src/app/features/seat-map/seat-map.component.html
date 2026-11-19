@@ -1,0 +1,53 @@
+<div class="cabin" [class.locked]="disabledReason() !== null">
+  <p class="front"><span aria-hidden="true">▲</span> Frente del avión</p>
+  @if (disabledReason(); as reason) {
+    <p class="disabled-reason notice notice-danger" role="alert">{{ reason }}</p>
+  }
+  <div
+    class="grid"
+    role="group"
+    aria-label="Mapa de asientos. Filas 1 a 30 desde el frente; usa las flechas para moverte."
+  >
+    <span class="col-head" aria-hidden="true"></span>
+    @for (letter of ['A', 'B', 'C']; track letter) {
+      <span class="col-head" aria-hidden="true">{{ letter }}</span>
+    }
+    <span class="col-head" aria-hidden="true"></span>
+    @for (letter of ['D', 'E', 'F']; track letter) {
+      <span class="col-head" aria-hidden="true">{{ letter }}</span>
+    }
+    <span class="col-head" aria-hidden="true"></span>
+
+    @for (row of rows(); track row.row) {
+      <span class="row-label" aria-hidden="true">{{ row.row }}</span>
+      @for (seat of row.left; track seat.seatId) {
+        <ng-container *ngTemplateOutlet="seatButton; context: { $implicit: seat }" />
+      }
+      <span class="aisle" aria-hidden="true"></span>
+      @for (seat of row.right; track seat.seatId) {
+        <ng-container *ngTemplateOutlet="seatButton; context: { $implicit: seat }" />
+      }
+      <span class="row-label" aria-hidden="true">{{ row.row }}</span>
+    }
+  </div>
+</div>
+
+<ng-template #seatButton let-seat>
+  <button
+    type="button"
+    class="seat seat-{{ seat.display }}"
+    [class.flash]="highlighted().has(seat.seatId)"
+    [attr.data-seat]="seat.seatId"
+    [attr.aria-label]="label(seat)"
+    [attr.aria-pressed]="seat.display === 'mine'"
+    [attr.aria-disabled]="locked() || (seat.display !== 'available' && seat.display !== 'mine')"
+    [attr.title]="tooltip(seat)"
+    [tabindex]="seat.seatId === active() ? 0 : -1"
+    (click)="activate(seat)"
+    (keydown)="onKeydown($event, seat)"
+    (keyup)="onKeyup($event)"
+    (focus)="active.set(seat.seatId)"
+  >
+    <app-seat-status-icon [status]="seat.display" />
+  </button>
+</ng-template>

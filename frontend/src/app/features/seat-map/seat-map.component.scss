@@ -1,0 +1,110 @@
+.cabin {
+  background: var(--color-surface);
+  border-radius: 48% 48% var(--radius-md) var(--radius-md) / 8% 8% var(--radius-md) var(--radius-md);
+  box-shadow: var(--shadow-1);
+  padding: var(--space-6) var(--space-3) var(--space-4);
+  overflow-x: auto;
+}
+
+.front {
+  text-align: center;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-3);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns:
+    1.75rem repeat(3, var(--seat-size)) 1.5rem repeat(3, var(--seat-size))
+    1.75rem;
+  gap: var(--space-1);
+  justify-content: center;
+  align-items: center;
+}
+
+.col-head,
+.row-label {
+  text-align: center;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.seat {
+  width: var(--seat-size);
+  height: var(--seat-size);
+  border-radius: var(--radius-sm) var(--radius-sm) 4px 4px;
+  border: 1px solid var(--color-border);
+  font: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 120ms ease;
+}
+
+.seat[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+.seat-available {
+  background: var(--seat-available-bg);
+  color: var(--seat-available-fg);
+}
+.seat-mine {
+  background: var(--seat-mine-bg);
+  color: var(--seat-mine-fg);
+  border-width: 2px;
+}
+.seat-other {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--seat-other-bg),
+    var(--seat-other-bg) 4px,
+    #ffe7a3 4px,
+    #ffe7a3 8px
+  );
+  color: var(--seat-other-fg);
+}
+.seat-booked {
+  background: var(--seat-booked-bg);
+  color: var(--seat-booked-fg);
+}
+.seat-unavailable {
+  background: var(--seat-unavailable-bg);
+  color: var(--seat-unavailable-fg);
+}
+
+.seat-available:hover:not([aria-disabled='true']),
+.seat-mine:hover:not([aria-disabled='true']) {
+  transform: scale(1.06);
+}
+
+/* Cambio remoto: resaltado breve (~600 ms) sin mover el foco (RUX-016). */
+.flash {
+  animation: flash 600ms ease-out;
+}
+
+@keyframes flash {
+  0% {
+    box-shadow: 0 0 0 4px var(--color-focus);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flash {
+    animation: none;
+    outline: 3px dashed var(--color-focus);
+  }
+  .seat {
+    transition: none;
+  }
+}
+
+.locked .grid {
+  opacity: 0.6;
+}

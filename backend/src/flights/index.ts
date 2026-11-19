@@ -6,6 +6,7 @@ export { isDelayed } from './domain/flight';
 export {
   FLIGHT_QUERY_PORT,
   type FlightQueryPort,
+  type FlightSearchCriteria,
   type FlightView,
 } from './application/ports/flight-query.port';
 export { FLIGHT_STATUS_PORT, type FlightStatusPort } from './application/ports/flight-status.port';
