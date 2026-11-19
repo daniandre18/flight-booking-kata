@@ -1,20 +1,29 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { SeatStatusIconComponent } from '../../shared/ui/seat-status-icon.component';
+import { IconComponent } from '../../shared/ui/icon.component';
+import { SeatIconComponent } from '../../shared/ui/seat-icon.component';
 import { SEAT_DISPLAY_LABEL, type SeatDisplay } from './seat-cell';
 
-/** Leyenda siempre visible con color e icono de cada estado (RUX-008). */
+/** Leyenda siempre visible con el mismo asiento SVG del mapa y su marca por estado (RUX-008). */
 @Component({
   selector: 'app-seat-legend',
-  imports: [SeatStatusIconComponent],
+  imports: [IconComponent, SeatIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <ul class="legend" aria-label="Leyenda del mapa">
       @for (status of statuses; track status) {
         <li>
-          <span class="swatch seat-{{ status }}"><app-seat-status-icon [status]="status" /></span>
+          <span class="swatch"><app-seat-icon [status]="status" /></span>
           {{ labels[status] }}
         </li>
       }
+      <li>
+        <span class="sign exit"><app-icon name="exit-right" [size]="12" /></span>
+        Salida de emergencia (filas 12 y 13)
+      </li>
+      <li>
+        <span class="sign facility"><app-icon name="restroom" [size]="14" /></span>
+        Baños
+      </li>
       <li class="types">Ventana: A y F · Medio: B y E · Pasillo: C y D</li>
     </ul>
   `,
@@ -25,7 +34,7 @@ import { SEAT_DISPLAY_LABEL, type SeatDisplay } from './seat-cell';
       flex-wrap: wrap;
       gap: var(--space-2) var(--space-4);
       padding: 0;
-      margin: 0 0 var(--space-3);
+      margin: 0 0 var(--space-4);
       font-size: var(--font-size-sm);
     }
     li {
@@ -35,41 +44,28 @@ import { SEAT_DISPLAY_LABEL, type SeatDisplay } from './seat-cell';
     }
     .swatch {
       display: inline-flex;
+      width: 1.9rem;
+      height: 1.9rem;
+    }
+    .sign {
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 1.75rem;
-      height: 1.75rem;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--color-border);
+      width: 1.5rem;
+      height: 1.5rem;
+      border-radius: 4px;
+    }
+    .exit {
+      background: #15803d;
+      color: #fff;
+    }
+    .facility {
+      background: #e2e8f0;
+      color: var(--color-text-muted);
     }
     .types {
       color: var(--color-text-muted);
-    }
-    .seat-available {
-      background: var(--seat-available-bg);
-      color: var(--seat-available-fg);
-    }
-    .seat-mine {
-      background: var(--seat-mine-bg);
-      color: var(--seat-mine-fg);
-    }
-    .seat-other {
-      background: repeating-linear-gradient(
-        45deg,
-        var(--seat-other-bg),
-        var(--seat-other-bg) 4px,
-        #ffe7a3 4px,
-        #ffe7a3 8px
-      );
-      color: var(--seat-other-fg);
-    }
-    .seat-booked {
-      background: var(--seat-booked-bg);
-      color: var(--seat-booked-fg);
-    }
-    .seat-unavailable {
-      background: var(--seat-unavailable-bg);
-      color: var(--seat-unavailable-fg);
+      flex-basis: 100%;
     }
   `,
 })

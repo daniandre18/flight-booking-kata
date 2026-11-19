@@ -11,7 +11,8 @@ import {
 import { NgTemplateOutlet } from '@angular/common';
 import { SEAT_LETTERS, SEAT_ROWS, formatSeatCode } from '@kata/shared';
 import { SEAT_TYPE_LABEL, formatMoney } from '../../shared/format';
-import { SeatStatusIconComponent } from '../../shared/ui/seat-status-icon.component';
+import { IconComponent } from '../../shared/ui/icon.component';
+import { SeatIconComponent } from '../../shared/ui/seat-icon.component';
 import { SEAT_DISPLAY_LABEL, type SeatCell } from './seat-cell';
 
 interface SeatRow {
@@ -29,6 +30,9 @@ const MOVES: Record<string, (row: number, col: number) => [number, number]> = {
   End: (row) => [row, SEAT_LETTERS.length - 1],
 };
 
+/** Filas de salida de emergencia sobre el ala (más espacio para las piernas). */
+export const EXIT_ROWS = [12, 13] as const;
+
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
 
@@ -39,7 +43,7 @@ const clamp = (value: number, min: number, max: number): number =>
  */
 @Component({
   selector: 'app-seat-map',
-  imports: [NgTemplateOutlet, SeatStatusIconComponent],
+  imports: [NgTemplateOutlet, IconComponent, SeatIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './seat-map.component.html',
   styleUrl: './seat-map.component.scss',
@@ -56,6 +60,7 @@ export class SeatMapComponent {
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly active = signal('1A');
+  protected readonly exitRows = EXIT_ROWS;
   protected readonly rows = computed<SeatRow[]>(() => {
     const rows: SeatRow[] = [];
     for (const seat of this.seats()) {
@@ -70,8 +75,13 @@ export class SeatMapComponent {
     return `Asiento ${seat.seatId}, ${SEAT_TYPE_LABEL[seat.type]}, ${SEAT_DISPLAY_LABEL[seat.display]}`;
   }
 
+  protected isExitRow(row: number): boolean {
+    return (EXIT_ROWS as readonly number[]).includes(row);
+  }
+
   protected tooltip(seat: SeatCell): string {
-    return `${seat.seatId} · ${SEAT_TYPE_LABEL[seat.type]} · ${formatMoney(seat.price)} · ${SEAT_DISPLAY_LABEL[seat.display]}`;
+    const exit = this.isExitRow(seat.row) ? ' · fila de salida de emergencia' : '';
+    return `${seat.seatId} · ${SEAT_TYPE_LABEL[seat.type]} · ${formatMoney(seat.price)} · ${SEAT_DISPLAY_LABEL[seat.display]}${exit}`;
   }
 
   protected locked(): boolean {

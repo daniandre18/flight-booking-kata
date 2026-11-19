@@ -1,0 +1,261 @@
+.results {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-6) 0 0;
+  display: grid;
+  gap: var(--space-4);
+}
+
+/* Tarjeta en 3 columnas: horario | estado y disponibilidad | precio y acción. */
+.flight {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) auto;
+  gap: var(--space-4) var(--space-8);
+  align-items: center;
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgb(7 22 51 / 0.06);
+  box-shadow: 0 1px 2px rgb(7 22 51 / 0.06);
+  transition:
+    box-shadow 200ms ease,
+    transform 200ms ease;
+}
+
+.flight:hover {
+  box-shadow: var(--shadow-float);
+  transform: translateY(-2px);
+}
+
+.closed {
+  background: #fbfbfc;
+}
+
+/* 1. Horario */
+.schedule {
+  display: grid;
+  grid-template-columns: auto minmax(5rem, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.endpoint {
+  display: flex;
+  flex-direction: column;
+}
+
+.arrival {
+  text-align: right;
+}
+
+.time {
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.code {
+  color: var(--color-text-muted);
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+  letter-spacing: 0.06em;
+}
+
+.route {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.duration {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.line {
+  position: relative;
+  width: 100%;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, var(--color-border) 0 6px, transparent 6px 12px);
+}
+
+.line::before,
+.line::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transform: translateY(-50%);
+  border: 2px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.line::before {
+  left: -2px;
+}
+
+.line::after {
+  right: -2px;
+}
+
+.plane {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-primary);
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+/* 2. Estado y disponibilidad */
+.status {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+.availability {
+  display: grid;
+  gap: var(--space-1);
+  width: 100%;
+}
+
+.seats {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.seats strong {
+  color: var(--color-text);
+}
+
+.notice {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+/* 3. Precio y acción */
+.purchase {
+  display: grid;
+  justify-items: end;
+  gap: var(--space-2);
+  text-align: right;
+}
+
+.price {
+  margin: 0;
+  display: grid;
+}
+
+.amount {
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--navy-800);
+}
+
+.per {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.choose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 11rem;
+  text-decoration: none;
+  border-radius: 12px;
+  box-shadow: 0 8px 18px -10px rgb(11 87 208 / 0.7);
+  transition:
+    background-color 200ms ease,
+    box-shadow 200ms ease,
+    transform 200ms ease;
+}
+
+.choose:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 22px -10px rgb(11 87 208 / 0.85);
+}
+
+.choose:active {
+  transform: translateY(0);
+}
+
+.secondary {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.unavailable {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.empty {
+  margin-top: var(--space-6);
+}
+
+/* Tableta: precio y acción pasan a una fila completa. */
+@media (max-width: 900px) {
+  .flight {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .purchase {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    justify-items: start;
+    text-align: left;
+    border-top: 1px solid var(--seat-unavailable-bg);
+    padding-top: var(--space-4);
+  }
+
+  .purchase .choose,
+  .purchase .unavailable {
+    justify-self: end;
+  }
+}
+
+/* Móvil: una columna. */
+@media (max-width: 640px) {
+  .flight {
+    grid-template-columns: 1fr;
+    padding: var(--space-4);
+  }
+
+  .time {
+    font-size: 1.5rem;
+  }
+
+  .purchase {
+    grid-template-columns: 1fr;
+  }
+
+  .purchase .choose {
+    justify-self: stretch;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flight,
+  .choose {
+    transition: none;
+  }
+
+  .flight:hover,
+  .choose:hover {
+    transform: none;
+  }
+}

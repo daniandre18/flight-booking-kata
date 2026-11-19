@@ -4,48 +4,89 @@
   top: 0;
   background: var(--color-surface);
   padding: var(--space-2) var(--space-3);
-  z-index: 10;
+  z-index: 20;
 }
 
 .skip-link:focus {
   left: var(--space-2);
 }
 
+/* Navbar navy: continúa el degradado del hero de la búsqueda. */
 .app-header {
+  position: relative;
+  z-index: 10;
+  background: var(--navy-900);
+  color: var(--on-navy);
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+}
+
+.header-inner {
+  max-width: 1200px;
+  margin: 0 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3) var(--space-6);
   padding: var(--space-3) var(--space-4);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-1);
 }
 
 .brand {
   font-size: var(--font-size-lg);
   margin: 0;
+  letter-spacing: -0.01em;
 }
 
 .brand a {
-  color: var(--color-text);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--on-navy);
   text-decoration: none;
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #38bdf8, var(--navy-600));
+  color: var(--on-navy);
+  transform: rotate(-12deg);
 }
 
 nav {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-4);
+  gap: var(--space-1) var(--space-2);
   flex: 1;
 }
 
 nav a {
+  color: var(--on-navy-muted);
   font-weight: 600;
   text-decoration: none;
-  padding: var(--space-1) 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 999px;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+nav a:hover {
+  color: var(--on-navy);
+  background: rgb(255 255 255 / 0.08);
 }
 
 nav a.active {
-  border-bottom: 3px solid var(--color-primary);
+  color: var(--on-navy);
+  background: rgb(125 211 252 / 0.16);
+  box-shadow: inset 0 -2px 0 var(--navy-accent);
+}
+
+.app-header :focus-visible {
+  outline-color: var(--navy-accent);
 }
 
 .app-main {
@@ -56,4 +97,32 @@ nav a.active {
 
 .app-main:focus {
   outline: none;
+}
+
+/* Móvil: marca y badge arriba, enlaces en una fila compacta debajo. */
+@media (max-width: 640px) {
+  .header-inner {
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  nav {
+    order: 3;
+    flex-basis: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: var(--space-1);
+  }
+
+  nav a {
+    white-space: nowrap;
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--font-size-sm);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  nav a {
+    transition: none;
+  }
 }

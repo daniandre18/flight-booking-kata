@@ -23,6 +23,8 @@ html {
 
 body {
   margin: 0;
+  /* El hero de la búsqueda ocupa todo el ancho; clip evita la barra horizontal sin romper sticky. */
+  overflow-x: clip;
   font-family: var(--font-family);
   font-size: var(--font-size-md);
   line-height: 1.5;
@@ -166,4 +168,77 @@ a {
 .notice-success {
   background: var(--color-success-bg);
   color: var(--color-success-fg);
+}
+
+/* Pill de estado del vuelo (resultados y otras vistas). */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.2rem var(--space-3);
+  border-radius: 999px;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.pill-SCHEDULED {
+  background: var(--color-success-bg);
+  color: var(--color-success-fg);
+}
+
+.pill-DELAYED {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-fg);
+}
+
+.pill-CANCELLED {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-fg);
+}
+
+.pill-SOLD_OUT {
+  background: var(--seat-unavailable-bg);
+  color: var(--seat-unavailable-fg);
+}
+
+/* Barra de disponibilidad: el texto la acompaña siempre; la barra es decorativa. */
+.bar {
+  display: block;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--seat-unavailable-bg);
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width 400ms ease;
+}
+
+.bar-plenty .fill {
+  background: linear-gradient(90deg, #16a34a, #22c55e);
+}
+
+.bar-few .fill {
+  background: linear-gradient(90deg, #d97706, #f59e0b);
+}
+
+.bar-almost-full .fill {
+  background: linear-gradient(90deg, #b91c1c, #ef4444);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fill {
+    transition: none;
+  }
 }

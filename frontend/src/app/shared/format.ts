@@ -43,10 +43,25 @@ const PERCENT = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 1 });
 /** `1,1 %` (separador decimal y espacio del español). */
 export const formatPercent = (value: number): string => `${PERCENT.format(value)} %`;
 
+/** Duración compacta: `55m`, `1h 40m`, `2h`. */
 export function formatDuration(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
-  return hours === 0 ? `${rest} min` : `${hours} h ${rest.toString().padStart(2, '0')} min`;
+  if (hours === 0) {
+    return `${rest}m`;
+  }
+  return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
+}
+
+/** Duración para lectores de pantalla: "1 hora y 40 minutos". */
+export function spokenDuration(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  const parts = [
+    hours > 0 ? `${hours} ${hours === 1 ? 'hora' : 'horas'}` : '',
+    rest > 0 ? `${rest} ${rest === 1 ? 'minuto' : 'minutos'}` : '',
+  ].filter(Boolean);
+  return parts.join(' y ');
 }
 
 /** `mm:ss` a partir de milisegundos restantes (nunca negativo). */

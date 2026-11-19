@@ -13,6 +13,7 @@ import {
   type SearchFlightsQuery,
 } from '@kata/shared';
 import { SearchFormComponent } from './search-form.component';
+import { SearchHeroComponent } from './search-hero.component';
 import { SearchResultsComponent } from './search-results.component';
 import { SearchResultsStore } from './search-results.store';
 
@@ -21,11 +22,11 @@ const DAY_MS = 86_400_000;
 /** `/search`: formulario, resultados en vivo y store; la consulta vive en la URL (recargable). */
 @Component({
   selector: 'app-search-page',
-  imports: [SearchFormComponent, SearchResultsComponent],
+  imports: [SearchHeroComponent, SearchFormComponent, SearchResultsComponent],
   providers: [SearchResultsStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <h2>Buscar vuelos</h2>
+    <app-search-hero />
     <app-search-form [initial]="initial()" (search)="onSearch($event)" />
     @switch (store.status()) {
       @case ('loading') {

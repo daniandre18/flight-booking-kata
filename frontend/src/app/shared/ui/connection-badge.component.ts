@@ -7,7 +7,7 @@ import { RealtimeService } from '../../core/realtime.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <span class="badge" [class.offline]="!connected()" role="status" aria-live="polite">
-      <span class="dot" aria-hidden="true">{{ connected() ? '●' : '◌' }}</span>
+      <span class="dot" aria-hidden="true"></span>
       {{ connected() ? 'Conectado' : 'Reconectando…' }}
     </span>
   `,
@@ -22,6 +22,16 @@ import { RealtimeService } from '../../core/realtime.service';
       font-weight: 600;
       background: var(--color-success-bg);
       color: var(--color-success-fg);
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .offline .dot {
+      background: transparent;
+      border: 2px solid currentColor;
     }
     .offline {
       background: var(--color-warning-bg);

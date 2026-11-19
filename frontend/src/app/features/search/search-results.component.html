@@ -1,0 +1,84 @@
+@if (flights().length === 0) {
+  <div class="card empty" role="status">
+    <h2>No hay vuelos para esta búsqueda</h2>
+    <p>
+      No encontramos vuelos entre esas ciudades en esa fecha. Prueba con otra fecha u otra ruta.
+    </p>
+  </div>
+} @else {
+  <ul class="results" aria-label="Vuelos encontrados">
+    @for (flight of flights(); track flight.id) {
+      <li class="flight" [class.closed]="!selectable(flight)">
+        <!-- 1. Horario: salida → ruta con avión y duración → llegada -->
+        <div class="schedule">
+          <div class="endpoint">
+            <span class="time">{{ time(flight.departureAt) }}</span>
+            <span class="code">{{ flight.origin }}</span>
+          </div>
+          <div class="route" aria-hidden="true">
+            <span class="duration">{{ duration(flight.durationMinutes) }}</span>
+            <span class="line">
+              <span class="plane"><app-icon name="plane" [size]="16" /></span>
+            </span>
+            <span class="number">{{ flight.flightNumber }}</span>
+          </div>
+          <div class="endpoint arrival">
+            <span class="time">{{ time(flight.arrivalAt) }}</span>
+            <span class="code">{{ flight.destination }}</span>
+          </div>
+          <p class="visually-hidden">
+            Vuelo {{ flight.flightNumber }} de {{ flight.origin }} a {{ flight.destination }}: sale
+            a las {{ time(flight.departureAt) }}, llega a las {{ time(flight.arrivalAt) }}, dura
+            {{ spokenDuration(flight.durationMinutes) }}.
+          </p>
+        </div>
+
+        <!-- 2. Estado y disponibilidad -->
+        <div class="status">
+          <span class="pill pill-{{ flight.status }}">
+            <span class="dot" aria-hidden="true"></span>
+            {{ statusLabel[flight.status] }}
+          </span>
+          <div class="availability">
+            <span class="seats">
+              <strong>{{ flight.availableSeats }}</strong> de {{ flight.capacity }} asientos
+              disponibles
+            </span>
+            <span class="bar bar-{{ availabilityLevel(flight) }}" aria-hidden="true">
+              <span class="fill" [style.width.%]="availablePercent(flight)"></span>
+            </span>
+          </div>
+          @if (flight.delayed && flight.status !== 'CANCELLED') {
+            <p class="notice notice-warning">
+              Nueva salida: {{ time(flight.departureAt) }} (antes
+              {{ time(flight.scheduledDepartureAt) }})
+            </p>
+          }
+          @if (notices()[flight.id]; as change) {
+            <p class="notice notice-info" role="status">{{ changeNotice[change] }}</p>
+          }
+        </div>
+
+        <!-- 3. Precio y acción -->
+        <div class="purchase">
+          <p class="price">
+            <span class="amount">{{ money(flight.fare) }}</span>
+            <span class="per">por persona</span>
+          </p>
+          @if (selectable(flight)) {
+            <a class="btn choose" [routerLink]="['/flights', flight.id, 'seats']">
+              Elegir asientos<span class="visually-hidden">
+                del vuelo {{ flight.flightNumber }}</span
+              >
+            </a>
+          } @else {
+            <span class="unavailable">No se pueden elegir asientos</span>
+          }
+          <a class="secondary" [routerLink]="['/flights', flight.id, 'dashboard']">
+            Ver ocupación<span class="visually-hidden"> del vuelo {{ flight.flightNumber }}</span>
+          </a>
+        </div>
+      </li>
+    }
+  </ul>
+}

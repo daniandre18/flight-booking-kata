@@ -284,5 +284,7 @@ Resultado del 2026-11-19, al cierre de la fase 10:
 - [Arquitectura](docs/architecture.md): módulos, diagramas, concurrencia, SOLID y DRY en el
   código, y seguridad.
 - [Uso de IA](docs/ia.md) y [registro de correcciones](docs/ia-log.md).
+- [Manual de la demo](docs/manual-demo.md): guion paso a paso de todas las funcionalidades para la
+  sustentación.
 - Especificación, plan, contratos y tareas:
   [specs/001-realtime-flight-booking/](specs/001-realtime-flight-booking/).

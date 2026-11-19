@@ -41,6 +41,17 @@
   --color-info-bg: #e8f0fe;
   --color-info-fg: #0842a0; /* 8,0:1 sobre su fondo */
 
+  /* Navbar y hero (navy). Texto claro sobre el tono más claro del degradado (#1e40af): */
+  --navy-900: #071633;
+  --navy-800: #0b1f44;
+  --navy-700: #12306b;
+  --navy-600: #1e40af;
+  --on-navy: #ffffff; /* 8,7:1 sobre --navy-600; 17,9:1 sobre --navy-900 */
+  --on-navy-muted: #c7d7fe; /* 6,1:1 sobre --navy-600 */
+  --navy-accent: #7dd3fc; /* indicador activo y foco sobre navy: 7,6:1 sobre --navy-700 */
+  --radius-lg: 16px;
+  --shadow-float: 0 18px 40px -12px rgb(7 22 51 / 0.35), 0 4px 12px rgb(7 22 51 / 0.12);
+
   /* Espaciado y forma */
   --space-1: 0.25rem;
   --space-2: 0.5rem;

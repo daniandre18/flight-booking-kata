@@ -1,13 +1,30 @@
-<div class="cabin" [class.locked]="disabledReason() !== null">
+<div class="fuselage" [class.locked]="disabledReason() !== null">
+  <div class="nose" aria-hidden="true">
+    <span class="cockpit"></span>
+  </div>
   <p class="front"><span aria-hidden="true">▲</span> Frente del avión</p>
   @if (disabledReason(); as reason) {
     <p class="disabled-reason notice notice-danger" role="alert">{{ reason }}</p>
   }
+
   <div
     class="grid"
     role="group"
-    aria-label="Mapa de asientos. Filas 1 a 30 desde el frente; usa las flechas para moverte."
+    aria-label="Mapa de asientos. Filas 1 a 30 desde el frente; usa las flechas para moverte. Salidas de emergencia en las filas 12 y 13."
   >
+    <!-- Zona delantera: puertas y baño -->
+    <div class="marker zone" aria-hidden="true">
+      <span class="exit left">
+        <app-icon name="exit-left" [size]="14" />
+        Salida
+      </span>
+      <span class="facility"><app-icon name="restroom" [size]="16" /> Baño</span>
+      <span class="exit right">
+        Salida
+        <app-icon name="exit-right" [size]="14" />
+      </span>
+    </div>
+
     <span class="col-head" aria-hidden="true"></span>
     @for (letter of ['A', 'B', 'C']; track letter) {
       <span class="col-head" aria-hidden="true">{{ letter }}</span>
@@ -19,7 +36,22 @@
     <span class="col-head" aria-hidden="true"></span>
 
     @for (row of rows(); track row.row) {
-      <span class="row-label" aria-hidden="true">{{ row.row }}</span>
+      @if (row.row === exitRows[0]) {
+        <!-- Salidas sobre el ala -->
+        <div class="marker wing" aria-hidden="true">
+          <span class="exit left">
+            <app-icon name="exit-left" [size]="14" />
+            Salida de emergencia
+          </span>
+          <span class="exit right">
+            Salida de emergencia
+            <app-icon name="exit-right" [size]="14" />
+          </span>
+        </div>
+      }
+      <span class="row-label" [class.exit-row]="isExitRow(row.row)" aria-hidden="true">
+        {{ row.row }}
+      </span>
       @for (seat of row.left; track seat.seatId) {
         <ng-container *ngTemplateOutlet="seatButton; context: { $implicit: seat }" />
       }
@@ -27,8 +59,23 @@
       @for (seat of row.right; track seat.seatId) {
         <ng-container *ngTemplateOutlet="seatButton; context: { $implicit: seat }" />
       }
-      <span class="row-label" aria-hidden="true">{{ row.row }}</span>
+      <span class="row-label" [class.exit-row]="isExitRow(row.row)" aria-hidden="true">
+        {{ row.row }}
+      </span>
     }
+
+    <!-- Zona trasera: baños y puertas -->
+    <div class="marker zone rear" aria-hidden="true">
+      <span class="exit left">
+        <app-icon name="exit-left" [size]="14" />
+        Salida
+      </span>
+      <span class="facility"><app-icon name="restroom" [size]="16" /> Baños</span>
+      <span class="exit right">
+        Salida
+        <app-icon name="exit-right" [size]="14" />
+      </span>
+    </div>
   </div>
 </div>
 
@@ -37,6 +84,7 @@
     type="button"
     class="seat seat-{{ seat.display }}"
     [class.flash]="highlighted().has(seat.seatId)"
+    [class.exit-row]="isExitRow(seat.row)"
     [attr.data-seat]="seat.seatId"
     [attr.aria-label]="label(seat)"
     [attr.aria-pressed]="seat.display === 'mine'"
@@ -48,6 +96,6 @@
     (keyup)="onKeyup($event)"
     (focus)="active.set(seat.seatId)"
   >
-    <app-seat-status-icon [status]="seat.display" />
+    <app-seat-icon [status]="seat.display" />
   </button>
 </ng-template>
