@@ -1,0 +1,13 @@
+@if (expiresAt()) {
+  <span
+    class="countdown"
+    [class.warning]="warning()"
+    role="timer"
+    aria-live="off"
+    [attr.aria-label]="'Tiempo restante ' + text()"
+    >{{ text() }}</span
+  >
+  @if (warning() && remainingMs() > 0) {
+    <span class="warning-text" role="alert">Queda menos de 1 minuto para pagar.</span>
+  }
+}

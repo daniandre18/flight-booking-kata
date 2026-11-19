@@ -1,0 +1,11 @@
+.flight-header p {
+  margin: 0 0 var(--space-2);
+}
+
+.status-CANCELLED {
+  color: var(--color-danger-fg);
+}
+
+.status-DELAYED {
+  color: var(--color-warning-fg);
+}

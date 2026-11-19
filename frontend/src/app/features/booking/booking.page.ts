@@ -22,20 +22,7 @@ import { BookingTicketComponent } from './booking-ticket.component';
   selector: 'app-booking-page',
   imports: [BookingLookupComponent, BookingTicketComponent, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    @if (booking(); as current) {
-      <h2>Tu boleto</h2>
-      <app-booking-ticket [booking]="current" (newLookup)="startNewLookup()" />
-      <p><a routerLink="/search">Buscar otro vuelo</a></p>
-    } @else {
-      <app-booking-lookup
-        [initialCode]="code() ?? ''"
-        [busy]="busy()"
-        [error]="error()"
-        (lookup)="find($event)"
-      />
-    }
-  `,
+  templateUrl: './booking.page.html',
 })
 export class BookingPage {
   readonly code = input<string>();

@@ -1,0 +1,4 @@
+<div class="bar" role="meter" aria-label="Ocupación del vuelo" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="occupancy()" [attr.aria-valuetext]="text()">
+  <span class="booked" [style.width.%]="width().booked"></span><span class="held" [style.width.%]="width().held"></span>
+</div>
+<p class="caption">{{ text() }}</p>

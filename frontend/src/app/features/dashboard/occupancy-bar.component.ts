@@ -9,56 +9,8 @@ import { formatPercent } from '../../shared/format';
 @Component({
   selector: 'app-occupancy-bar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <div
-      class="bar"
-      role="meter"
-      aria-label="Ocupación del vuelo"
-      aria-valuemin="0"
-      aria-valuemax="100"
-      [attr.aria-valuenow]="occupancy()"
-      [attr.aria-valuetext]="text()"
-    >
-      <span class="booked" [style.width.%]="width().booked"></span>
-      <span class="held" [style.width.%]="width().held"></span>
-    </div>
-    <p class="caption">{{ text() }}</p>
-  `,
-  styles: `
-    .bar {
-      display: flex;
-      height: 1.5rem;
-      border-radius: var(--radius-sm);
-      overflow: hidden;
-      background: var(--seat-available-bg);
-      border: 1px solid var(--color-border);
-      margin-top: var(--space-4);
-    }
-    .booked {
-      background: var(--seat-booked-bg);
-      transition: width 300ms ease;
-    }
-    .held {
-      background: repeating-linear-gradient(
-        45deg,
-        var(--seat-other-fg),
-        var(--seat-other-fg) 4px,
-        var(--seat-other-bg) 4px,
-        var(--seat-other-bg) 8px
-      );
-      transition: width 300ms ease;
-    }
-    .caption {
-      color: var(--color-text-muted);
-      font-size: var(--font-size-sm);
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .booked,
-      .held {
-        transition: none;
-      }
-    }
-  `,
+  templateUrl: './occupancy-bar.component.html',
+  styleUrl: './occupancy-bar.component.scss',
 })
 export class OccupancyBarComponent {
   readonly counts = input.required<SeatCounts>();

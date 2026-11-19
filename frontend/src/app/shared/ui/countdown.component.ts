@@ -20,47 +20,8 @@ const WARNING_MS = 60_000;
 @Component({
   selector: 'app-countdown',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    @if (expiresAt()) {
-      <span
-        class="countdown"
-        [class.warning]="warning()"
-        role="timer"
-        aria-live="off"
-        [attr.aria-label]="'Tiempo restante ' + text()"
-        >{{ text() }}</span
-      >
-      @if (warning() && remainingMs() > 0) {
-        <span class="warning-text" role="alert">Queda menos de 1 minuto para pagar.</span>
-      }
-    }
-  `,
-  styles: `
-    :host {
-      display: inline-flex;
-      flex-direction: column;
-      gap: var(--space-1);
-    }
-    .countdown {
-      font-variant-numeric: tabular-nums;
-      font-size: var(--font-size-xl);
-      font-weight: 700;
-      padding: var(--space-1) var(--space-3);
-      border-radius: var(--radius-sm);
-      background: var(--color-info-bg);
-      color: var(--color-info-fg);
-    }
-    .warning {
-      background: var(--color-danger-bg);
-      color: var(--color-danger-fg);
-      outline: 2px solid var(--color-danger-fg);
-    }
-    .warning-text {
-      color: var(--color-danger-fg);
-      font-weight: 600;
-      font-size: var(--font-size-sm);
-    }
-  `,
+  templateUrl: './countdown.component.html',
+  styleUrl: './countdown.component.scss',
 })
 export class CountdownComponent {
   readonly expiresAt = input<string | null>(null);

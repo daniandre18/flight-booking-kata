@@ -1,0 +1,16 @@
+@if (flight(); as f) {
+  <div class="flight-header">
+    <h2>{{ f.flightNumber }} · {{ f.origin }} → {{ f.destination }}</h2>
+    <p>
+      {{ date(f.departureAt) }} · Sale {{ time(f.departureAt) }} · Llega {{ time(f.arrivalAt) }} ·
+      <strong class="status-{{ f.status }}">{{ statusLabel[f.status] }}</strong> · Tarifa
+      {{ money(f.fare) }} por asiento
+    </p>
+    @if (f.delayed && f.status !== 'CANCELLED') {
+      <p class="notice notice-warning" role="status">
+        Vuelo retrasado: salía a las {{ time(f.scheduledDepartureAt) }}, ahora sale a las
+        {{ time(f.departureAt) }}.
+      </p>
+    }
+  </div>
+}

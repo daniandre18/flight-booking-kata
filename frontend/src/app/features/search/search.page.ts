@@ -25,23 +25,7 @@ const DAY_MS = 86_400_000;
   imports: [SearchHeroComponent, SearchFormComponent, SearchResultsComponent],
   providers: [SearchResultsStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <app-search-hero />
-    <app-search-form [initial]="initial()" (search)="onSearch($event)" />
-    @switch (store.status()) {
-      @case ('loading') {
-        <p role="status">Buscando vuelos…</p>
-      }
-      @case ('ready') {
-        <app-search-results [flights]="store.flights()" [notices]="store.notices()" />
-      }
-      @case ('error') {
-        <p class="notice notice-danger" role="alert">
-          No pudimos cargar los vuelos. Intenta de nuevo.
-        </p>
-      }
-    }
-  `,
+  templateUrl: './search.page.html',
 })
 export class SearchPage implements OnInit {
   readonly origin = input<string>();

@@ -1,0 +1,10 @@
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin: 0; }
+@media (min-width: 641px) { .cards { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.stat dt { font-weight: 600; color: var(--color-text-muted); }
+.stat dd { display: grid; gap: var(--space-1); margin: 0; font-size: clamp(1.75rem, 4vw, 2.25rem); font-weight: 850; font-variant-numeric: tabular-nums; }
+.stat dd span { color: var(--color-text-muted); font-size: var(--font-size-sm); font-weight: 500; }
+.available { border-top: 5px solid var(--seat-available-fg); background: linear-gradient(135deg, var(--color-surface), var(--seat-available-bg)); }
+.held { border-top: 5px solid var(--seat-other-fg); background: linear-gradient(135deg, var(--color-surface), var(--seat-other-bg)); }
+.booked { border-top: 5px solid var(--seat-booked-bg); background: linear-gradient(135deg, var(--color-surface), var(--seat-unavailable-bg)); }
+.occupancy { border-top: 5px solid var(--color-primary); background: linear-gradient(135deg, var(--color-surface), var(--color-info-bg)); }
+.total { color: var(--color-text-muted); }
