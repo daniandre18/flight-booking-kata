@@ -12,10 +12,11 @@
     "dev": "pnpm build:shared && pnpm --parallel --filter backend --filter frontend dev",
     "build": "pnpm -r build",
     "test": "pnpm build:shared && pnpm -r test",
-    "lint": "eslint .",
+    "lint": "eslint . && node scripts/check-templates.mjs",
     "typecheck": "pnpm build:shared && pnpm -r typecheck",
     "seed": "pnpm build:shared && pnpm --filter backend seed",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test:cov": "pnpm build:shared && pnpm -r test:cov"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -28,6 +28,14 @@ cada fase.
   (Angular 22 y typescript-eslint aún no soportan 7.0) y NestJS 11 (nestjs-zod y nestjs-pino
   aún no soportan Nest 12).
 
+- **Bloque 2 (fases 3b y 4)**:
+  - Al aplicar los criterios de evaluación (constitución 1.1.0), `/speckit.analyze` detectó que
+    el límite por `X-Client-Id` se evadía rotando UUID: se añadió un contador por IP.
+  - Un error real lo atrapó la e2e y no la unitaria: el proveedor de `FlightWriteContext` usaba
+    `ModuleRef.get` en la fábrica y recibía dependencias aún sin instanciar (`null`). Se corrigió
+    inyectando los tokens y se endureció la prueba unitaria (antes solo comprobaba `!== undefined`).
+  - `max-params` ≤ 4 frente a la inyección de Nest se resolvió con objetos de dependencias.
+
 ## Prompts
 
 En [prompts/](prompts/).

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CardBrand } from '../enums/index.js';
 import { SeatCodeSchema } from '../domain/seat-code.js';
 import { FlightDtoSchema, IsoDateTimeSchema } from './flight.schema.js';
 import { SeatTypeSchema } from './seat.schema.js';
@@ -86,6 +87,7 @@ export const BookingDtoSchema = z.object({
   buyer: z.object({ name: z.string(), email: z.email() }),
   passengers: z.array(z.object({ seatId: SeatCodeSchema, name: z.string(), type: SeatTypeSchema })),
   total: z.int().positive(),
+  cardBrand: z.enum(CardBrand),
   cardLast4: z.string().regex(/^\d{4}$/),
   createdAt: IsoDateTimeSchema,
 });

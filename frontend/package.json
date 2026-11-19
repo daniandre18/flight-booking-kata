@@ -6,7 +6,8 @@
     "dev": "ng serve --proxy-config proxy.conf.json",
     "build": "ng build",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.spec.json --noEmit",
-    "test": "ng test --watch=false"
+    "test": "ng test --watch=false",
+    "test:cov": "ng test --watch=false --coverage"
   },
   "private": true,
   "dependencies": {
@@ -27,6 +28,7 @@
     "@angular/build": "^22.2.8",
     "@angular/cli": "^22.2.8",
     "@angular/compiler-cli": "^22.2.0",
+    "@vitest/coverage-v8": "5.1.1",
     "jsdom": "^30.0.0",
     "typescript": "~6.0.3",
     "vitest": "^5.0.0"

@@ -40,14 +40,15 @@ pnpm dev                        # api en :3000 y web en :4200 (proxy a la api)
 
 ## Scripts
 
-| Script           | Qué hace                                                                       |
-| ---------------- | ------------------------------------------------------------------------------ |
-| `pnpm dev`       | api y web en modo desarrollo                                                   |
-| `pnpm build`     | compila los tres paquetes                                                      |
-| `pnpm typecheck` | `tsc --noEmit` en los tres paquetes                                            |
-| `pnpm lint`      | ESLint (sin `any`)                                                             |
-| `pnpm test`      | pruebas de shared, backend (unitarias + e2e contra PostgreSQL real) y frontend |
-| `pnpm seed`      | regenera los datos de prueba                                                   |
+| Script           | Qué hace                                                                                                       |
+| ---------------- | -------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`       | api y web en modo desarrollo                                                                                   |
+| `pnpm build`     | compila los tres paquetes                                                                                      |
+| `pnpm typecheck` | `tsc --noEmit` en los tres paquetes                                                                            |
+| `pnpm lint`      | ESLint (sin `any`, complejidad ≤ 10, funciones ≤ 40 líneas, ≤ 4 parámetros) y verificación de plantillas       |
+| `pnpm test`      | pruebas de shared, backend (unitarias + e2e contra PostgreSQL real) y frontend                                 |
+| `pnpm test:cov`  | cobertura; falla si baja del 80 % (líneas y ramas) en `shared/` y en el dominio y los casos de uso del backend |
+| `pnpm seed`      | regenera los datos de prueba                                                                                   |
 
 Las pruebas e2e levantan PostgreSQL 16 con Testcontainers. Para usar una base existente:
 `TEST_DATABASE_URL=postgresql://... pnpm --filter backend test:e2e`.

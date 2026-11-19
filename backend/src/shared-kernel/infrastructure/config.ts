@@ -13,6 +13,9 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   LOG_PRETTY: z.stringbool().default(false),
+  CORS_ORIGINS: z.string().default('http://localhost:4200,http://localhost:8080'),
+  BODY_LIMIT: z.string().default('16kb'),
+  RATE_LIMIT_MULTIPLIER: z.coerce.number().positive().default(1),
 });
 
 export interface AppConfig {
@@ -25,6 +28,12 @@ export interface AppConfig {
   port: number;
   logLevel: z.infer<typeof EnvSchema>['LOG_LEVEL'];
   logPretty: boolean;
+  /** Orígenes permitidos por CORS (principio X). */
+  corsOrigins: string[];
+  /** Tamaño máximo del body JSON. */
+  bodyLimit: string;
+  /** Multiplica los límites de solicitudes; el arnés e2e lo sube salvo en las pruebas de límites. */
+  rateLimitMultiplier: number;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
@@ -45,6 +54,9 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     port: values.PORT,
     logLevel: values.LOG_LEVEL,
     logPretty: values.LOG_PRETTY,
+    corsOrigins: values.CORS_ORIGINS.split(',').map((origin) => origin.trim()),
+    bodyLimit: values.BODY_LIMIT,
+    rateLimitMultiplier: values.RATE_LIMIT_MULTIPLIER,
   };
 }
 

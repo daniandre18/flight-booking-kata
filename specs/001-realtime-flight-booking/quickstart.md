@@ -24,6 +24,9 @@ Plantilla en `.env.example` (raíz). Valores por defecto para la demo:
 | `ADMIN_KEY` | `demo-admin-key` | Clave para retrasar o cancelar vuelos (cámbiala fuera de la demo) |
 | `HOLD_TTL_SECONDS` | `600` | Duración del bloqueo compartido |
 | `HOLD_SWEEP_INTERVAL_MS` | `2000` | Intervalo del job de expiración (configurable) |
+| `CORS_ORIGINS` | `http://localhost:4200,http://localhost:8080` | Orígenes permitidos por CORS (principio X) |
+| `BODY_LIMIT` | `16kb` | Tamaño máximo del body JSON; más grande → 400 |
+| `RATE_LIMIT_MULTIPLIER` | `1` | Multiplica los límites de solicitudes (research §25); el arnés e2e usa 100 |
 | `PORT` | `3000` | Puerto de la api |
 | `LOG_LEVEL` | `info` | Nivel de logs JSON |
 

@@ -28,6 +28,9 @@ services:
       HOLD_SWEEP_INTERVAL_MS: ${HOLD_SWEEP_INTERVAL_MS:-2000}
       PORT: 3000
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:4200}
+      BODY_LIMIT: ${BODY_LIMIT:-16kb}
+      RATE_LIMIT_MULTIPLIER: ${RATE_LIMIT_MULTIPLIER:-1}
     ports:
       - '3000:3000'
     depends_on:

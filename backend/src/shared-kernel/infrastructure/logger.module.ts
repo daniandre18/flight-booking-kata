@@ -1,34 +1,45 @@
 import { Module } from '@nestjs/common';
+import { ClientIdSchema } from '@kata/shared';
 import { LoggerModule } from 'nestjs-pino';
 import type { IncomingMessage } from 'node:http';
+import type { Options } from 'pino-http';
+import { holderTagOf } from '../domain/holder-tag';
 import { APP_CONFIG, type AppConfig } from './config';
 
 const CENSORED = '[redactado]';
 
-/** Logs JSON con pino; nunca se registran la clave de admin ni los datos de la tarjeta. */
+/** Rutas que pino reemplaza por `[redactado]` (principio X): credenciales y datos de pago. */
+export const REDACTED_PATHS = [
+  'req.headers["x-client-id"]',
+  'req.headers["x-admin-key"]',
+  'req.headers.authorization',
+  'card',
+  '*.card',
+  'req.body.card',
+];
+
+/** Contexto del cliente para los logs: su `holderTag`, nunca el `clientId` en claro. */
+export function holderTagFromRequest(req: IncomingMessage): string | null {
+  const parsed = ClientIdSchema.safeParse(req.headers['x-client-id']);
+  return parsed.success ? holderTagOf(parsed.data) : null;
+}
+
+export function buildPinoHttpOptions(config: AppConfig): Options {
+  return {
+    level: config.logLevel,
+    transport: config.logPretty ? { target: 'pino-pretty' } : undefined,
+    redact: { paths: REDACTED_PATHS, censor: CENSORED },
+    customProps: (req: IncomingMessage) => ({ holderTag: holderTagFromRequest(req) }),
+    autoLogging: { ignore: (req: IncomingMessage) => req.url === '/health' },
+  };
+}
+
+/** Logs JSON con pino (principio VIII) sin credenciales ni datos de tarjeta (principio X). */
 @Module({
   imports: [
     LoggerModule.forRootAsync({
       inject: [APP_CONFIG],
-      useFactory: (config: AppConfig) => ({
-        pinoHttp: {
-          level: config.logLevel,
-          transport: config.logPretty ? { target: 'pino-pretty' } : undefined,
-          redact: {
-            paths: [
-              'req.headers["x-admin-key"]',
-              'req.headers.authorization',
-              'card.number',
-              'card.cvv',
-              '*.card.number',
-              '*.card.cvv',
-            ],
-            censor: CENSORED,
-          },
-          customProps: (req: IncomingMessage) => ({ clientId: req.headers['x-client-id'] ?? null }),
-          autoLogging: { ignore: (req: IncomingMessage) => req.url === '/health' },
-        },
-      }),
+      useFactory: (config: AppConfig) => ({ pinoHttp: buildPinoHttpOptions(config) }),
     }),
   ],
   exports: [LoggerModule],

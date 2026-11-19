@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaUnitOfWork } from '../../shared-kernel/infrastructure/persistence/prisma-unit-of-work';
-import { type FlightRepository } from '../application/ports/flight.repository';
+import { PrismaUnitOfWork } from '../../../shared-kernel/infrastructure/persistence/prisma-unit-of-work';
+import { type FlightStatusPort } from '../../application/ports/flight-status.port';
 
 @Injectable()
-export class PrismaFlightRepository implements FlightRepository {
+export class PrismaFlightStatusAdapter implements FlightStatusPort {
   constructor(private readonly uow: PrismaUnitOfWork) {}
 
   async markSoldOutIfFull(flightId: string): Promise<boolean> {

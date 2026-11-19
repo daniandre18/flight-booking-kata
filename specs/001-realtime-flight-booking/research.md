@@ -172,6 +172,11 @@ mismo vuelo (por ejemplo, dos pestañas); la propiedad del asiento la sigue deci
 `UPDATE` condicional. Esta lectura está registrada en el Constitution Check del plan como
 excepción justificada al principio I.
 
+**(bloque 2)** La política (límite y vencimiento común) vive en el dominio (`hold-policy.ts`) y
+la aplica `HoldSeatUseCase`; `SeatHoldsPort` expone primitivas atómicas: `lockClientHolds`
+(advisory lock + conteo), `holdIfAvailable` (UPDATE condicional) y `releaseIfOwned`. Así las
+reglas se prueban con dobles y el adaptador solo garantiza la atomicidad.
+
 Con la decisión 6 el lock del vuelo ya serializa estas solicitudes; el advisory lock se
 mantiene como se decidió en el documento fuente, porque protege la regla del límite por sí
 mismo si en el futuro cambia la estrategia de lock del vuelo, y su costo es despreciable.

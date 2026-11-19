@@ -1,6 +1,11 @@
 /**
  * API pública del módulo flights: lo único que otros módulos pueden importar (principio IV).
- * Se amplía con las reglas de dominio del vuelo en la fase 7.
  */
-export { FLIGHT_REPOSITORY, type FlightRepository } from './application/ports/flight.repository';
+export { toFlightDto } from './application/flight-dto.mapper';
+export {
+  FLIGHT_QUERY_PORT,
+  type FlightQueryPort,
+  type FlightView,
+} from './application/ports/flight-query.port';
+export { FLIGHT_STATUS_PORT, type FlightStatusPort } from './application/ports/flight-status.port';
 export { FlightsModule } from './flights.module';

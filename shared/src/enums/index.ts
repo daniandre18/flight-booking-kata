@@ -48,5 +48,14 @@ export const FlightChange = {
 } as const;
 export type FlightChange = (typeof FlightChange)[keyof typeof FlightChange];
 
+/** Marca de la tarjeta: con los últimos 4 dígitos, lo único que se guarda (principio X). */
+export const CardBrand = {
+  VISA: 'VISA',
+  MASTERCARD: 'MASTERCARD',
+  DISCOVER: 'DISCOVER',
+  OTHER: 'OTHER',
+} as const;
+export type CardBrand = (typeof CardBrand)[keyof typeof CardBrand];
+
 export const AIRPORT_CODES = ['BOG', 'MDE', 'CLO', 'CTG', 'BAQ'] as const;
 export type AirportCode = (typeof AIRPORT_CODES)[number];

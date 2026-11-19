@@ -1,4 +1,5 @@
-import { type INestApplication } from '@nestjs/common';
+import { type Type } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { allSeatPositions, type AirportCode, type FlightStatus } from '@kata/shared';
 import { randomUUID } from 'node:crypto';
@@ -28,8 +29,16 @@ export interface FlightOverrides {
   flightNumber?: string;
 }
 
+export interface TestAppOptions {
+  clock?: FakeClock;
+  /** Controladores extra solo para la prueba (por ejemplo, sondas del throttler). */
+  controllers?: Type[];
+  /** Variables de entorno que sobrescriben las del arnés. */
+  env?: Record<string, string>;
+}
+
 export interface TestApp {
-  app: INestApplication;
+  app: NestExpressApplication;
   clock: FakeClock;
   prisma: PrismaService;
   /** Crea un vuelo con sus 180 asientos disponibles y devuelve su id. */
@@ -40,7 +49,8 @@ export interface TestApp {
 }
 
 /** Arranca la app completa contra la base de prueba con el reloj reemplazado por FakeClock. */
-export async function createTestApp(clock = new FakeClock()): Promise<TestApp> {
+export async function createTestApp(options: TestAppOptions = {}): Promise<TestApp> {
+  const clock = options.clock ?? new FakeClock();
   const databaseUrl = process.env.TEST_DATABASE_URL;
   if (databaseUrl === undefined) {
     throw new Error('TEST_DATABASE_URL no está definida (la define global-setup)');
@@ -49,14 +59,21 @@ export async function createTestApp(clock = new FakeClock()): Promise<TestApp> {
     DATABASE_URL: databaseUrl,
     DB_POOL_MAX: '20',
     ADMIN_KEY: TEST_ADMIN_KEY,
-    LOG_LEVEL: 'silent',
+    // E2E_LOG_LEVEL=error muestra los errores de la api al depurar una prueba.
+    LOG_LEVEL: process.env.E2E_LOG_LEVEL ?? 'silent',
+    // Los límites de solicitudes se relajan salvo en las pruebas que los verifican.
+    RATE_LIMIT_MULTIPLIER: '100',
+    ...options.env,
   });
 
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+  const moduleRef = await Test.createTestingModule({
+    imports: [AppModule],
+    controllers: options.controllers ?? [],
+  })
     .overrideProvider(CLOCK)
     .useValue(clock)
     .compile();
-  const app = moduleRef.createNestApplication({ bufferLogs: true });
+  const app = moduleRef.createNestApplication<NestExpressApplication>({ bufferLogs: true });
   configureApp(app);
   await app.init();
   const prisma = app.get(PrismaService);

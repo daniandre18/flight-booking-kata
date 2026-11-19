@@ -9,7 +9,13 @@
  * Uso: `pnpm seed` (borra y regenera) o `tsx prisma/seed.ts --if-empty` (solo si no hay vuelos).
  */
 import { PrismaPg } from '@prisma/adapter-pg';
-import { allSeatPositions, formatSeatCode, toBogotaDate, type AirportCode } from '@kata/shared';
+import {
+  allSeatPositions,
+  formatSeatCode,
+  toBogotaDate,
+  type AirportCode,
+  type SeatLetter,
+} from '@kata/shared';
 import { config as loadEnv } from 'dotenv';
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -186,21 +192,17 @@ function uniqueCodes(count: number, random: () => number): string[] {
   return [...codes];
 }
 
-async function seed(prisma: PrismaClient): Promise<void> {
-  const random = createRandom(PRNG_SEED);
-  const today = toBogotaDate(new Date());
-  const flights = buildFlights(today, random);
-  const nearFull = findNearFullFlight(flights, today);
+interface SeatRow {
+  id: string;
+  flightId: string;
+  row: number;
+  letter: SeatLetter;
+  status: 'AVAILABLE' | 'BOOKED';
+}
 
-  await prisma.$executeRaw`TRUNCATE flight_events, idempotency_keys, booking_seats, bookings, seats, flights, airports RESTART IDENTITY CASCADE`;
-
-  await prisma.airport.createMany({
-    data: Object.entries(AIRPORTS).map(([code, city]) => ({ code, city })),
-  });
-  await prisma.flight.createMany({ data: flights });
-
+function buildSeats(flights: FlightRow[], nearFull: FlightRow): SeatRow[] {
   const positions = allSeatPositions();
-  const seats = flights.flatMap((flight) =>
+  return flights.flatMap((flight) =>
     positions.map(({ row, letter }) => {
       const code = formatSeatCode(row, letter);
       const booked = flight.id === nearFull.id && code !== NEAR_FULL.freeSeat;
@@ -213,18 +215,22 @@ async function seed(prisma: PrismaClient): Promise<void> {
       };
     }),
   );
-  // Inserción por lotes secuenciales: acota el tamaño de cada sentencia y la memoria.
-  for (let start = 0; start < seats.length; start += SEAT_CHUNK) {
-    await prisma.seat.createMany({ data: seats.slice(start, start + SEAT_CHUNK) });
-  }
+}
 
-  const bookedSeats = seats.filter(
-    (seat) => seat.flightId === nearFull.id && seat.status === 'BOOKED',
-  );
-  const groups: (typeof bookedSeats)[] = [];
-  for (let start = 0; start < bookedSeats.length; start += BOOKING_GROUP_SIZE) {
-    groups.push(bookedSeats.slice(start, start + BOOKING_GROUP_SIZE));
+function groupInChunks<T>(items: T[], size: number): T[][] {
+  const groups: T[][] = [];
+  for (let start = 0; start < items.length; start += size) {
+    groups.push(items.slice(start, start + size));
   }
+  return groups;
+}
+
+/** Reservas reales para los asientos BOOKED del vuelo casi lleno, agrupadas de a 4. */
+function buildBookings(seats: SeatRow[], nearFull: FlightRow, random: () => number) {
+  const groups = groupInChunks(
+    seats.filter((seat) => seat.flightId === nearFull.id && seat.status === 'BOOKED'),
+    BOOKING_GROUP_SIZE,
+  );
   const codes = uniqueCodes(groups.length, random);
   const bookings = groups.map((group, index) => ({
     id: uuidV5(`booking-${nearFull.id}-${index}`),
@@ -234,18 +240,42 @@ async function seed(prisma: PrismaClient): Promise<void> {
     buyerName: `Comprador Demo ${index + 1}`,
     buyerEmail: `demo${index + 1}@example.com`,
     total: nearFull.fare * group.length,
+    cardBrand: 'VISA' as const,
     cardLast4: '4242',
   }));
-  await prisma.booking.createMany({ data: bookings });
-  await prisma.bookingSeat.createMany({
-    data: groups.flatMap((group, index) =>
-      group.map((seat) => ({
-        bookingId: bookings[index]?.id as string,
-        seatId: seat.id,
-        passengerName: `Pasajero ${formatSeatCode(seat.row, seat.letter)}`,
-      })),
-    ),
+  const bookingSeats = groups.flatMap((group, index) =>
+    group.map((seat) => ({
+      bookingId: bookings[index]?.id as string,
+      seatId: seat.id,
+      passengerName: `Pasajero ${formatSeatCode(seat.row, seat.letter)}`,
+    })),
+  );
+  return { bookings, bookingSeats };
+}
+
+async function insertSeats(prisma: PrismaClient, seats: SeatRow[]): Promise<void> {
+  // Inserción por lotes secuenciales: acota el tamaño de cada sentencia y la memoria.
+  for (const chunk of groupInChunks(seats, SEAT_CHUNK)) {
+    await prisma.seat.createMany({ data: chunk });
+  }
+}
+
+async function seed(prisma: PrismaClient): Promise<void> {
+  const random = createRandom(PRNG_SEED);
+  const today = toBogotaDate(new Date());
+  const flights = buildFlights(today, random);
+  const nearFull = findNearFullFlight(flights, today);
+  const seats = buildSeats(flights, nearFull);
+  const { bookings, bookingSeats } = buildBookings(seats, nearFull, random);
+
+  await prisma.$executeRaw`TRUNCATE flight_events, idempotency_keys, booking_seats, bookings, seats, flights, airports RESTART IDENTITY CASCADE`;
+  await prisma.airport.createMany({
+    data: Object.entries(AIRPORTS).map(([code, city]) => ({ code, city })),
   });
+  await prisma.flight.createMany({ data: flights });
+  await insertSeats(prisma, seats);
+  await prisma.booking.createMany({ data: bookings });
+  await prisma.bookingSeat.createMany({ data: bookingSeats });
 
   log(
     `Seed listo: ${flights.length} vuelos, ${seats.length} asientos, ${bookings.length} reservas.`,
@@ -279,6 +309,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  console.error(error);
+  process.stderr.write(`El seed falló: ${error instanceof Error ? error.stack : String(error)}\n`);
   process.exit(1);
 });

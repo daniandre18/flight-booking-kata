@@ -27,6 +27,13 @@ enum SeatStatus {
   BOOKED
 }
 
+enum CardBrand {
+  VISA
+  MASTERCARD
+  DISCOVER
+  OTHER
+}
+
 enum FlightEventType {
   SEAT_HELD
   SEAT_RELEASED
@@ -93,6 +100,8 @@ model Booking {
   buyerName       String           @map("buyer_name")
   buyerEmail      String           @map("buyer_email")
   total           Int
+  // De la tarjeta solo se guardan marca y últimos 4 dígitos (principio X).
+  cardBrand       CardBrand        @default(OTHER) @map("card_brand")
   cardLast4       String           @map("card_last4") @db.Char(4)
   createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   flight          Flight           @relation(fields: [flightId], references: [id])

@@ -85,10 +85,12 @@ export type FlightStatsEvent = z.infer<typeof FlightStatsEventSchema>;
 export const FlightRoomPayloadSchema = z.object({ flightId: z.uuid() });
 export type FlightRoomPayload = z.infer<typeof FlightRoomPayloadSchema>;
 
-export type FlightJoinAck = { ok: true; seq: number } | { ok: false; code: 'FLIGHT_NOT_FOUND' };
-export interface OkAck {
-  ok: true;
+export interface RejectedAck {
+  ok: false;
+  code: 'FLIGHT_NOT_FOUND' | 'VALIDATION_ERROR';
 }
+export type FlightJoinAck = { ok: true; seq: number } | RejectedAck;
+export type RoomAck = { ok: true } | RejectedAck;
 
 export interface ServerToClientEvents {
   'seat:held': (event: SeatHeldEvent) => void;
@@ -100,8 +102,8 @@ export interface ServerToClientEvents {
 
 export interface ClientToServerEvents {
   'flight:join': (payload: FlightRoomPayload, ack: (result: FlightJoinAck) => void) => void;
-  'flight:leave': (payload: FlightRoomPayload, ack: (result: OkAck) => void) => void;
-  'search:subscribe': (payload: Record<string, never>, ack: (result: OkAck) => void) => void;
+  'flight:leave': (payload: FlightRoomPayload, ack: (result: RoomAck) => void) => void;
+  'search:subscribe': (payload: Record<string, never>, ack: (result: RoomAck) => void) => void;
 }
 
 /** Eventos del room del vuelo: forman una secuencia sin repeticiones de `seq`. */
