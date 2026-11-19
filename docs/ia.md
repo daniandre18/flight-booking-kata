@@ -6,12 +6,13 @@ corrección está en [ia-log.md](ia-log.md).
 
 ## Herramientas
 
-| Herramienta                                                   | Para qué                                                                         |
-| ------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Claude Code (modelos Claude Opus) en VS Code                  | Especificación, plan, tareas, implementación, pruebas, revisión y documentación  |
-| GitHub Spec Kit 1.4 (skills `speckit-*` en `.claude/skills/`) | Flujo guiado: constitución → spec → clarify → plan → tasks → analyze → implement |
-| Claude in Chrome                                              | Validación manual del quickstart en el navegador (dos pestañas, admin, tablero)  |
-| Skill `angular-developer`                                     | Convenciones de Angular 22: zoneless, signals, pruebas con Vitest                |
+| Herramienta                        | Versión / modelo                                                                                                             | Para qué                                                                                    |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Claude Code (extensión de VS Code) | 2.1.327; modelo **Claude Opus 5.5** (`claude-opus-5-5`) en los bloques 3 a 5; familia Claude Opus en las sesiones anteriores | Especificación, plan, tareas, implementación, pruebas, revisión, mediciones y documentación |
+| GitHub Spec Kit                    | 1.4.3.dev0 (skills `speckit-*` en `.claude/skills/`)                                                                         | Flujo guiado: constitución → spec → clarify → plan → tasks → analyze → implement            |
+| Claude in Chrome                   | extensión de Chrome conectada a Claude Code                                                                                  | Validación manual del quickstart en el navegador (dos pestañas, pago, tablero, admin)       |
+| Skill `angular-developer`          | incluida en Claude Code                                                                                                      | Convenciones de Angular 22: zoneless, signals, pruebas con Vitest                           |
+| Playwright                         | 1.65.1 (con el Chrome instalado)                                                                                             | Prueba automatizada de dos pestañas (T179)                                                  |
 
 ## Flujo con Spec Kit
 
@@ -81,13 +82,32 @@ Resumen de [ia-log.md](ia-log.md):
 
 ## Impacto
 
-| Aspecto           | Resultado                                                                              |
-| ----------------- | -------------------------------------------------------------------------------------- |
-| Alcance entregado | 6 pantallas, 4 historias, 182 de 182 tareas, incluida la opcional T179                 |
-| Pruebas           | 356 automatizadas; las 5 críticas del principio V, contra PostgreSQL real              |
-| Cobertura         | backend dominio y aplicación 99,8 % de líneas y 96,5 % de ramas; shared 100 % y 95,2 % |
-| Integridad        | 100 bloqueos simultáneos → 1 × 201 y 99 × 409, en 3 de 3 ejecuciones                   |
-| Tiempo real       | propagación p95 de 13,9 ms; vencimiento notificado en ≤ 2,0 s                          |
+| Aspecto           | Resultado                                                                                                        |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Alcance entregado | 6 pantallas, 4 historias, 182 de 182 tareas, incluida la opcional T179                                           |
+| Pruebas           | 356 automatizadas; las 5 críticas del principio V, contra PostgreSQL real                                        |
+| Cobertura         | backend dominio y aplicación 99,8 % de líneas y 96,5 % de ramas; shared 100 % y 95,2 %                           |
+| Integridad        | 100 bloqueos simultáneos → 1 × 201 y 99 × 409, en 5 de 5 ejecuciones                                             |
+| Tiempo real       | propagación p95 de 13,9 ms entre clientes y 18–51 ms entre pestañas de Chrome; vencimiento notificado en ≤ 2,0 s |
+
+### Tiempo ahorrado (estimación)
+
+Línea de tiempo real, según los commits: el primer documento se hizo el 18-nov a las 17:49 y el
+cierre el 19-nov a las 09:48. Son unas 17 h de reloj, con una pausa nocturna en medio. La
+estimación sin IA es del autor: supone a una persona senior que ya conoce el stack y escribe a
+mano la especificación, el código, las pruebas y la documentación con el mismo alcance.
+
+| Área                                                          |       Sin IA (estimado) | Con IA                           | Dónde aportó más                                                                                |
+| ------------------------------------------------------------- | ----------------------: | -------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Especificación, plan, research, contratos y tareas (Spec Kit) |                  8–12 h | ~1,5 h                           | Redacción y consistencia entre documentos; `/speckit-analyze` encontró inconsistencias (D3, D4) |
+| Backend: dominio, casos de uso, adaptadores y seguridad       |                 16–24 h | ~3 h                             | Adaptadores Prisma con SQL atómico, dobles en memoria y pruebas de contrato                     |
+| Frontend: 6 pantallas, stores y accesibilidad                 |                 16–24 h | ~3 h                             | Mapa accesible, sincronización por `seq` y formularios con los esquemas compartidos             |
+| Pruebas e2e, mediciones y validación                          |                  8–12 h | ~2 h                             | Concurrencia, expiración, gateway, Playwright y script de tiempos                               |
+| Documentación de entrega                                      |                   4–6 h | ~1 h                             | README, arquitectura y registro de IA con datos medidos                                         |
+| **Total**                                                     | **52–78 h (7–10 días)** | **~10–11 h de trabajo efectivo** | **5 a 7 veces menos tiempo**                                                                    |
+
+El tiempo "con IA" incluye la revisión humana entre bloques, pero no el tiempo de reflexión
+sobre las decisiones de la constitución y del plan.
 
 - **Dónde aceleró más**: código repetitivo pero exigente (adaptadores Prisma, dobles en memoria,
   pruebas de contrato, componentes accesibles, documentación con datos reales) y la

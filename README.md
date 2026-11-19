@@ -25,6 +25,36 @@ Socket.io solo después del commit.
 
 Monorepo con pnpm workspaces. Node.js 24 LTS (`.nvmrc`) y pnpm 10 (`packageManager`).
 
+## Arquitectura en breve
+
+Es un **monolito modular con arquitectura hexagonal** (NestJS), una SPA Angular y un paquete de
+contratos compartidos. Los **comandos** van por REST y los **cambios** se difunden por Socket.io
+solo después del commit. PostgreSQL decide cada transición de asiento con un único `UPDATE`
+condicional, así que nunca hay doble reserva.
+
+```mermaid
+flowchart LR
+  UI["Angular SPA<br/>(mapa, búsqueda, pago, tablero, admin)"]
+  NGINX["nginx<br/>SPA + proxy"]
+  API["NestJS<br/>módulos flights · seats · bookings · admin · realtime"]
+  DB[("PostgreSQL 16<br/>UPDATE condicional + flight_events")]
+  SH["@kata/shared<br/>zod, tipos, errores, eventos"]
+
+  UI -- "REST /api (bloquear, liberar, pagar, admin)" --> NGINX --> API --> DB
+  API -- "Socket.io /realtime: seat:* y flight:* con seq, tras el commit" --> NGINX --> UI
+  SH -. "mismos contratos" .- UI
+  SH -. "mismos contratos" .- API
+```
+
+- **Concurrencia**: lock de la fila del vuelo, luego advisory lock del cliente, luego un
+  `UPDATE seats ... WHERE disponible` cuyo conteo decide quién gana (1 × 201, 99 × 409).
+- **Tiempo real**: cada evento lleva una `seq` por vuelo. El cliente descarta duplicados y,
+  ante un hueco o una reconexión, pide de nuevo el snapshot por HTTP.
+- **Bloqueo temporal**: 10 minutos, con un reloj compartido por cliente y vuelo. Un barrido
+  cada 2 s libera los vencidos y los notifica.
+
+Detalle, justificación y decisiones técnicas en [docs/architecture.md](docs/architecture.md).
+
 ## Levantar todo (un comando)
 
 ```bash

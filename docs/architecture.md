@@ -37,6 +37,43 @@ flowchart LR
   SPA --> UI
 ```
 
+## Justificación de la arquitectura
+
+**Monolito modular con hexágonos por módulo**, en lugar de microservicios o una aplicación en
+capas técnicas:
+
+| Criterio                                  | Por qué esta elección                                                                                                                                                                                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| La integridad es lo crítico               | La exclusión mutua debe decidirse en **una sola base y una sola transacción** (lock del vuelo → cliente → asiento). Con microservicios, confirmar o cancelar cruzaría servicios y obligaría a sagas o 2PC para algo que aquí es un `COMMIT` |
+| Alcance de 1 día y demo local             | Un solo proceso, un `docker compose up` y nada de colas, brokers ni service discovery (principio VII, YAGNI)                                                                                                                                |
+| Límites claros sin coste de red           | Cada módulo (`flights`, `seats`, `bookings`, `admin`, `realtime`) escribe solo sus tablas y expone puertos en su `index.ts`. Si mañana hiciera falta separar un servicio, la frontera ya existe                                             |
+| Reglas que se prueban sin infraestructura | Hexagonal: el dominio y los casos de uso no importan Nest, Prisma ni Socket.io. Se prueban con dobles (161+ pruebas unitarias, 99 % de cobertura) y los adaptadores reales se prueban contra PostgreSQL                                     |
+| Tiempo real fiable                        | Eventos publicados **tras el commit**, con `seq` por vuelo y resincronización por snapshot: un cliente nunca pinta un estado que pueda revertirse                                                                                           |
+
+Alternativas descartadas: **microservicios** (complejidad distribuida sin beneficio a esta
+escala), **serverless** (los WebSockets persistentes y el barrido periódico encajan mal),
+**capas técnicas** del tipo `controllers/` y `services/` (mezclan dominios y dificultan aislar
+las reglas) y **CQRS con bus de comandos** (excesivo para 4 historias). Más detalle en
+research.md §1–§3.
+
+## Decisiones técnicas clave
+
+| Tema                  | Decisión                                                                            | Por qué                                                                                                                                                          | Alternativa descartada                                                                                                       |
+| --------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Backend               | NestJS 11                                                                           | Módulos e inyección por tokens para los puertos; gateway de Socket.io, scheduler y throttler integrados                                                          | Express a mano (más código transversal); Spring o Quarkus (otro lenguaje, sin contratos compartidos con el frontend)         |
+| Frontend              | Angular 22 (standalone, signals, zoneless)                                          | Stores con signals y detección de cambios fina para un mapa de 180 botones que cambia en vivo                                                                    | React (válido; Angular da DI y pruebas integradas sin elegir librerías)                                                      |
+| Contratos             | `@kata/shared` con zod 4                                                            | Un esquema es a la vez validación en tiempo de ejecución y tipo, igual en backend y frontend                                                                     | class-validator (atado a Nest); generar tipos desde OpenAPI (dos fuentes de verdad)                                          |
+| Protocolo de comandos | REST (`/api`) con códigos HTTP explícitos                                           | Respuesta síncrona verificable (201, 409, 410, 422…) e idempotencia por header                                                                                   | Comandos por WebSocket (sin semántica HTTP; prohibido por el principio II)                                                   |
+| Protocolo de eventos  | Socket.io 4, namespace `/realtime`, rooms `flight:{id}` y `search`                  | Rooms, reconexión automática con re-join y transporte de respaldo; el handshake valida el `clientId`                                                             | SSE (sin rooms ni canal de ida; habría que reimplementar suscripciones); polling (latencia y carga)                          |
+| Orden y recuperación  | `seq` por vuelo, avanzada en la transacción y guardada en `flight_events`           | El cliente detecta duplicados y huecos sin depender del broker; el tablero tiene historial                                                                       | Timestamps (no ordenan commits concurrentes); outbox (más infraestructura; el snapshot cubre el hueco)                       |
+| Persistencia          | PostgreSQL 16 + Prisma 7 (adaptador `pg`)                                           | Transacciones, `UPDATE ... RETURNING`, locks de fila y advisory locks; Prisma da tipos y migraciones, y `$queryRaw` con tagged templates las sentencias atómicas | Redis con `SET NX` (una segunda fuente de verdad que sincronizar con la reserva); TypeORM (tipado más débil)                 |
+| Bloqueo de asiento    | `UPDATE` condicional cuyo conteo decide; `UNIQUE(seat_id)` en `booking_seats`       | Atomicidad sin leer y luego escribir; la base hace la exclusión mutua                                                                                            | `SELECT ... FOR UPDATE` + `UPDATE` (dos pasos, más locks); versión optimista en la aplicación (reintentos)                   |
+| Caché                 | **Ninguna**                                                                         | La base es la única fuente de verdad. La vista perezosa (un `HELD` vencido cuenta como disponible) y los índices bastan para 75.600 asientos                     | Redis o caché en memoria (invalidación compleja con eventos concurrentes; riesgo de mostrar un asiento libre que no lo está) |
+| Expiración            | Barrido cada 2 s (`@nestjs/schedule`) + vista perezosa                              | La corrección no depende del job; el job solo notifica a tiempo (≤ 2 s)                                                                                          | Solo vista perezosa (nadie avisaría al vencer); TTL de Redis (otra fuente de verdad)                                         |
+| Bus interno           | EventEmitter2 (`@nestjs/event-emitter`)                                             | Desacopla los casos de uso (publican eventos de dominio) del gateway, en el mismo proceso                                                                        | Broker externo (Kafka o RabbitMQ: innecesario para un monolito)                                                              |
+| Seguridad             | helmet, CORS, throttler, zod en toda entrada, `timingSafeEqual`, pino con redacción | Ver la sección Seguridad                                                                                                                                         | —                                                                                                                            |
+| Pruebas               | Jest + Supertest + Testcontainers; Vitest en Angular; Playwright con Chrome         | Las e2e contra la base y el socket reales encontraron bugs que los dobles no veían                                                                               | Base en memoria (no reproduce locks ni concurrencia)                                                                         |
+
 ## Contratos compartidos (`@kata/shared`)
 
 Hay una sola definición de cada contrato (principio III):
