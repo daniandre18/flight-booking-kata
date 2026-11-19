@@ -43,6 +43,8 @@ export class DashboardStore {
   private flightId = '';
 
   readonly activity = signal<ActivityEntryDto[]>([]);
+  /** Hora del último snapshot o evento aplicado, proveniente del servidor. */
+  readonly lastUpdated = signal<string | null>(null);
   readonly flight = computed(() => this.sync.state().flight);
   readonly syncing = this.sync.syncing;
   readonly failed = this.sync.failed;
@@ -59,10 +61,14 @@ export class DashboardStore {
         this.loadedLog = await this.api.getFlightEvents(this.flightId, ACTIVITY_LIMIT);
       },
       // Solo hasta la seq del snapshot: lo posterior llega como evento (sin duplicados).
-      onSnapshot: (snapshot) =>
-        this.activity.set(this.loadedLog.filter((item) => item.seq <= snapshot.seq)),
-      onApplied: (event) =>
-        this.activity.update((log) => [toEntry(event), ...log].slice(0, ACTIVITY_LIMIT)),
+      onSnapshot: (snapshot) => {
+        this.activity.set(this.loadedLog.filter((item) => item.seq <= snapshot.seq));
+        this.lastUpdated.set(snapshot.serverNow);
+      },
+      onApplied: (event) => {
+        this.activity.update((log) => [toEntry(event), ...log].slice(0, ACTIVITY_LIMIT));
+        this.lastUpdated.set(event.data.occurredAt);
+      },
     });
   }
 }

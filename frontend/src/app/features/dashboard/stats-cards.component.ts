@@ -9,23 +9,23 @@ import { formatPercent } from '../../shared/format';
   template: `
     <dl class="cards">
       <div class="card stat available">
-        <dt>Disponibles</dt>
-        <dd>{{ counts().available }}</dd>
+        <dt>Asientos disponibles</dt>
+        <dd>{{ counts().available }}<span>libres para reservar</span></dd>
       </div>
       <div class="card stat held">
         <dt>Bloqueados</dt>
-        <dd>{{ counts().held }}</dd>
+        <dd>{{ counts().held }}<span>en proceso de compra</span></dd>
       </div>
       <div class="card stat booked">
         <dt>Reservados</dt>
-        <dd>{{ counts().booked }}</dd>
+        <dd>{{ counts().booked }}<span>ventas confirmadas</span></dd>
       </div>
-      <div class="card stat">
-        <dt>Ocupación</dt>
-        <dd>{{ percent(occupancy()) }}</dd>
+      <div class="card stat occupancy">
+        <dt>Ocupación actual</dt>
+        <dd>{{ percent(occupancy()) }}<span>del vuelo vendido</span></dd>
       </div>
     </dl>
-    <p class="total">Total: {{ counts().total }} asientos</p>
+    <p class="total">Capacidad total: <strong>{{ counts().total }} asientos</strong></p>
   `,
   styles: `
     .cards {
@@ -44,19 +44,29 @@ import { formatPercent } from '../../shared/format';
       color: var(--color-text-muted);
     }
     .stat dd {
+      display: grid;
+      gap: var(--space-1);
       margin: 0;
-      font-size: var(--font-size-xl);
-      font-weight: 800;
+      font-size: clamp(1.75rem, 4vw, 2.25rem);
+      font-weight: 850;
       font-variant-numeric: tabular-nums;
     }
+    .stat dd span { color: var(--color-text-muted); font-size: var(--font-size-sm); font-weight: 500; }
     .available {
-      border-left: 6px solid var(--seat-available-fg);
+      border-top: 5px solid var(--seat-available-fg);
+      background: linear-gradient(135deg, var(--color-surface), var(--seat-available-bg));
     }
     .held {
-      border-left: 6px solid var(--seat-other-fg);
+      border-top: 5px solid var(--seat-other-fg);
+      background: linear-gradient(135deg, var(--color-surface), var(--seat-other-bg));
     }
     .booked {
-      border-left: 6px solid var(--seat-booked-bg);
+      border-top: 5px solid var(--seat-booked-bg);
+      background: linear-gradient(135deg, var(--color-surface), var(--seat-unavailable-bg));
+    }
+    .occupancy {
+      border-top: 5px solid var(--color-primary);
+      background: linear-gradient(135deg, var(--color-surface), var(--color-info-bg));
     }
     .total {
       color: var(--color-text-muted);

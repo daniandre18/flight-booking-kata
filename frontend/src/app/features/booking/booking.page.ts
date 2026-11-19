@@ -25,11 +25,9 @@ import { BookingTicketComponent } from './booking-ticket.component';
   template: `
     @if (booking(); as current) {
       <h2>Tu boleto</h2>
-      <app-booking-ticket [booking]="current" />
+      <app-booking-ticket [booking]="current" (newLookup)="startNewLookup()" />
       <p><a routerLink="/search">Buscar otro vuelo</a></p>
     } @else {
-      <h2>Consultar boleto</h2>
-      <p>Ingresa el código de reserva y el correo con el que compraste.</p>
       <app-booking-lookup
         [initialCode]="code() ?? ''"
         [busy]="busy()"
@@ -68,5 +66,11 @@ export class BookingPage {
     } finally {
       this.busy.set(false);
     }
+  }
+
+  protected async startNewLookup(): Promise<void> {
+    this.booking.set(null);
+    this.error.set(null);
+    await this.router.navigate(['/booking']);
   }
 }

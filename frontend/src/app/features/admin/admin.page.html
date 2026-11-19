@@ -1,92 +1,167 @@
-<h2>Administración de vuelos</h2>
-<form class="card" (submit)="submit($event)" novalidate aria-label="Cambiar estado del vuelo">
-  <div class="field">
-    <label for="admin-key">Clave de administrador</label>
-    <input
-      id="admin-key"
-      type="password"
-      autocomplete="off"
-      [value]="adminKey()"
-      (input)="setKey($event)"
-      aria-describedby="admin-key-hint"
-    />
-    <span class="field-hint" id="admin-key-hint"
-      >Se guarda solo en esta pestaña mientras esté abierta.</span
-    >
-  </div>
-  <div class="field">
-    <label for="admin-flight">Id del vuelo</label>
-    <input
-      id="admin-flight"
-      autocomplete="off"
-      [value]="flightId()"
-      (input)="flightId.set(value($event))"
-      (change)="loadFlight()"
-      aria-describedby="admin-flight-hint"
-    />
-    <span class="field-hint" id="admin-flight-hint">
-      Lo encuentras en la URL del mapa o del tablero (<code>/flights/&lt;id&gt;/…</code>).
-    </span>
-  </div>
-  @if (current(); as f) {
-    <p class="notice notice-info" role="status">
-      {{ f.flightNumber }} · {{ f.origin }} → {{ f.destination }} · {{ date(f.departureAt) }}
-      {{ time(f.departureAt) }} · {{ statusLabel[f.status] }} ·
-      <a [routerLink]="['/flights', f.id, 'dashboard']">Ver tablero</a>
-    </p>
-  }
-  <fieldset>
-    <legend>Acción</legend>
-    <div class="actions">
-      <label
-        ><input
-          type="radio"
-          name="action"
-          value="DELAYED"
-          [checked]="action() === 'DELAYED'"
-          (change)="action.set('DELAYED')"
-        />
-        Retrasar</label
-      >
-      <label
-        ><input
-          type="radio"
-          name="action"
-          value="CANCELLED"
-          [checked]="action() === 'CANCELLED'"
-          (change)="action.set('CANCELLED')"
-        />
-        Cancelar</label
-      >
+<header>
+  <div class="page-title">
+    <span class="title-icon"><app-icon name="shield" [size]="24" /></span>
+    <div>
+      <h2>Administración de vuelos</h2>
+      <span class="restricted"><app-icon name="lock" [size]="14" /> Acceso restringido</span>
     </div>
-  </fieldset>
-  @if (action() === 'DELAYED') {
+  </div>
+  <p class="field-hint">Gestiona el estado de salida y monitorea los vuelos del día.</p>
+</header>
+
+<div class="operations-layout">
+  <form class="operations-card" (submit)="submit($event)" novalidate aria-label="Control de operaciones">
+    <div class="panel-heading">
+      <h3>Control de Operaciones</h3>
+      <app-icon name="shield" [size]="22" />
+    </div>
+
     <div class="field">
-      <label for="admin-departure">Nueva hora de salida (hora de Bogotá)</label>
-      <input
-        id="admin-departure"
-        type="datetime-local"
-        [value]="newDeparture()"
-        (input)="newDeparture.set(value($event))"
-      />
+      <label for="admin-key">Clave de administrador</label>
+      <div class="field-control">
+        <app-icon name="key" [size]="19" />
+        <input
+          id="admin-key"
+          [type]="showKey() ? 'text' : 'password'"
+          autocomplete="off"
+          [value]="adminKey()"
+          (input)="setKey($event)"
+          aria-describedby="admin-key-hint"
+        />
+        <button
+          class="icon-button"
+          type="button"
+          [attr.aria-label]="showKey() ? 'Ocultar clave' : 'Mostrar clave'"
+          (click)="toggleKey()"
+        >
+          <app-icon [name]="showKey() ? 'eye-off' : 'eye'" [size]="20" />
+        </button>
+      </div>
+      <span class="field-hint" id="admin-key-hint">Se guarda solo en esta pestaña mientras esté abierta.</span>
     </div>
-  } @else {
-    <p class="notice notice-warning">
-      Cancelar libera todos los asientos bloqueados y no se puede deshacer.
-    </p>
-  }
-  @if (error(); as message) {
-    <p class="notice notice-danger" role="alert">{{ message }}</p>
-  }
-  @if (success(); as message) {
-    <p class="notice notice-success" role="status">{{ message }}</p>
-  }
-  <button
-    class="btn"
-    [class.btn-danger]="action() === 'CANCELLED'"
-    type="submit"
-    [disabled]="busy()"
-  >
-    {{ busy() ? 'Guardando…' : action() === 'DELAYED' ? 'Retrasar vuelo' : 'Cancelar vuelo' }}
-  </button>
-</form>
+
+    <div class="field">
+      <label for="admin-flight">Id del vuelo</label>
+      <input
+        id="admin-flight"
+        autocomplete="off"
+        [value]="flightId()"
+        (input)="flightId.set(value($event))"
+        (change)="loadFlight()"
+        aria-describedby="admin-flight-hint"
+      />
+      <span class="field-hint" id="admin-flight-hint">
+        Selecciona un vuelo en el panel derecho o pega su ID desde el mapa o tablero.
+      </span>
+    </div>
+
+    @if (current(); as f) {
+      <p class="notice notice-info" role="status">
+        {{ f.flightNumber }} · {{ f.origin }} → {{ f.destination }} · {{ date(f.departureAt) }}
+        {{ time(f.departureAt) }} · {{ statusLabel[f.status] }} ·
+        <a class="dashboard-link" [routerLink]="['/flights', f.id, 'dashboard']">
+          Abrir tablero en vivo →
+        </a>
+      </p>
+    }
+
+    <fieldset>
+      <legend>Acción</legend>
+      <div class="action-options">
+        <button
+          class="action-option action-delay"
+          type="button"
+          [attr.aria-pressed]="action() === 'DELAYED'"
+          (click)="action.set('DELAYED')"
+        >
+          <app-icon name="clock" [size]="24" />
+          <strong>Retrasar</strong>
+          <span>Cambiar la hora de salida</span>
+        </button>
+        <button
+          class="action-option action-cancel"
+          type="button"
+          [attr.aria-pressed]="action() === 'CANCELLED'"
+          (click)="action.set('CANCELLED')"
+        >
+          <app-icon name="alert" [size]="24" />
+          <strong>Cancelar</strong>
+          <span>Liberar los asientos bloqueados</span>
+        </button>
+      </div>
+    </fieldset>
+
+    @if (action() === 'DELAYED') {
+      <div class="field">
+        <label for="admin-departure">Nueva hora de salida (hora de Bogotá)</label>
+        <input
+          id="admin-departure"
+          type="datetime-local"
+          [value]="newDeparture()"
+          (input)="newDeparture.set(value($event))"
+        />
+      </div>
+    } @else {
+      <p class="notice notice-warning">
+        Cancelar libera todos los asientos bloqueados y no se puede deshacer.
+      </p>
+    }
+
+    @if (error(); as message) {
+      <p class="notice notice-danger" role="alert">{{ message }}</p>
+    }
+    @if (success(); as message) {
+      <p class="notice notice-success" role="status">{{ message }}</p>
+    }
+    <button
+      class="btn submit-action"
+      [class.btn-danger]="action() === 'CANCELLED'"
+      [class.submit-delay]="action() === 'DELAYED'"
+      type="submit"
+      [disabled]="busy()"
+    >
+      {{ busy() ? 'Guardando…' : action() === 'DELAYED' ? 'Retrasar vuelo' : 'Cancelar vuelo' }}
+    </button>
+  </form>
+
+  <section class="flights-panel" aria-labelledby="active-flights-title">
+    <div class="panel-heading">
+      <div>
+        <h3 id="active-flights-title">Vuelos activos</h3>
+        <p class="field-hint">Selecciona uno para cargarlo en el control.</p>
+      </div>
+      <button class="icon-button" type="button" aria-label="Actualizar vuelos" (click)="loadOperationFlights()">
+        <app-icon name="clock" [size]="20" />
+      </button>
+    </div>
+
+    @if (loadingFlights()) {
+      <p class="notice notice-info" role="status">Actualizando vuelos…</p>
+    } @else if (flightsError()) {
+      <p class="notice notice-danger" role="alert">No pudimos cargar los vuelos operativos.</p>
+    } @else {
+      <div class="flight-list">
+        @for (flight of operationFlights(); track flight.id) {
+          <button
+            class="flight-row"
+            type="button"
+            [class.selected]="flight.id === flightId()"
+            [attr.aria-pressed]="flight.id === flightId()"
+            (click)="selectFlight(flight)"
+          >
+            <span class="flight-code">{{ flight.flightNumber }}</span>
+            <span>
+              <span class="flight-route">{{ flight.origin }} → {{ flight.destination }}</span>
+              <span class="flight-meta">Sale {{ time(flight.departureAt) }}</span>
+            </span>
+            <span class="pill pill-{{ flight.status }} status">
+              <span class="dot" aria-hidden="true"></span>{{ statusLabel[flight.status] }}
+            </span>
+          </button>
+        } @empty {
+          <p class="field-hint">No hay vuelos operativos para mostrar.</p>
+        }
+      </div>
+    }
+  </section>
+</div>

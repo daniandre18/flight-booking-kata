@@ -47,6 +47,15 @@ async function openMap(browser: Browser, flightId: string): Promise<Page> {
   return page;
 }
 
+async function openDashboard(browser: Browser, flightId: string): Promise<Page> {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(`/flights/${flightId}/dashboard`);
+  await expect(page.getByText('Ocupación en tiempo real')).toBeVisible();
+  await expect(page.getByText('En vivo', { exact: true })).toBeVisible();
+  return page;
+}
+
 const seat = (page: Page, seatId: string) =>
   page.getByRole('button', { name: new RegExp(`^Asiento ${seatId},`) });
 
@@ -103,4 +112,25 @@ test('clic simultáneo sobre el mismo asiento: gana exactamente una pestaña', a
     ? first
     : second;
   await seat(winner, seatId).click(); // libera
+});
+
+test('el dashboard actualiza KPI y actividad cuando otro cliente bloquea un asiento', async ({
+  browser,
+  request,
+}) => {
+  const { flightId, seats } = await pickFlight(request);
+  const seatId = seats[0] as string;
+  const dashboard = await openDashboard(browser, flightId);
+  const map = await openMap(browser, flightId);
+  const held = dashboard.locator('app-stats-cards .held dd');
+  const before = Number.parseInt((await held.textContent()) ?? '0', 10);
+
+  await seat(map, seatId).click();
+  await expect(held).toContainText(String(before + 1), { timeout: 1_000 });
+  const latestActivity = dashboard.locator('app-activity-log .log li').first();
+  await expect(latestActivity).toContainText(`Asiento ${seatId}`, { timeout: 1_000 });
+  await expect(latestActivity).toContainText('bloqueo', { timeout: 1_000 });
+
+  await seat(map, seatId).click(); // libera el asiento para no modificar la base de la demo
+  await expect(held).toContainText(String(before), { timeout: 1_000 });
 });

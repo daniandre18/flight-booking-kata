@@ -22,7 +22,13 @@ export function activityLabel(entry: ActivityEntryDto): string {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="card" aria-labelledby="activity-title">
-      <h3 id="activity-title">Actividad reciente</h3>
+      <div class="heading">
+        <div>
+          <p class="eyebrow">Actualización continua</p>
+          <h3 id="activity-title">Actividad reciente</h3>
+        </div>
+        <span class="live"><span aria-hidden="true"></span>En vivo</span>
+      </div>
       @if (entries().length === 0) {
         <p class="empty">Todavía no hay actividad en este vuelo.</p>
       } @else {
@@ -56,16 +62,30 @@ export function activityLabel(entry: ActivityEntryDto): string {
       display: grid;
       grid-template-columns: 5.5rem 1fr auto;
       gap: var(--space-2);
-      padding: var(--space-2) 0;
+      padding: var(--space-3) 0;
       border-bottom: 1px solid var(--seat-unavailable-bg);
     }
+    .heading { display: flex; align-items: start; justify-content: space-between; gap: var(--space-3); }
+    .heading h3 { margin: 0; }
+    .eyebrow { margin: 0 0 var(--space-1); color: var(--color-text-muted); font-size: 0.75rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+    .live { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-success-fg); font-size: var(--font-size-sm); font-weight: 800; }
+    .live span { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: currentColor; }
     time {
       font-variant-numeric: tabular-nums;
       color: var(--color-text-muted);
     }
     .type {
-      font-weight: 600;
+      width: fit-content;
+      padding: 0.1rem var(--space-2);
+      border-radius: 999px;
+      color: var(--color-info-fg);
+      background: var(--color-info-bg);
+      font-size: var(--font-size-sm);
+      font-weight: 700;
     }
+    .type-SEAT_BOOKED { color: var(--color-success-fg); background: var(--color-success-bg); }
+    .type-SEAT_RELEASED { color: var(--color-warning-fg); background: var(--color-warning-bg); }
+    .type-FLIGHT_UPDATED { color: var(--color-danger-fg); background: var(--color-danger-bg); }
     .empty {
       color: var(--color-text-muted);
     }

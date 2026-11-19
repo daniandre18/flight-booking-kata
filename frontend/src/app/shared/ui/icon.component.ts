@@ -2,6 +2,15 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 
 export type IconName =
   | 'plane'
+  | 'ticket'
+  | 'key'
+  | 'mail'
+  | 'shield'
+  | 'lock'
+  | 'eye'
+  | 'eye-off'
+  | 'clock'
+  | 'alert'
   | 'plane-takeoff'
   | 'plane-landing'
   | 'calendar'
@@ -35,6 +44,48 @@ export type IconName =
           <svg:path
             d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"
           />
+        }
+        @case ('ticket') {
+          <svg:path d="M2 9a3 3 0 0 0 0 6v3a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-3a3 3 0 0 0 0-6V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v3Z" />
+          <svg:path d="M13 5v2" />
+          <svg:path d="M13 17v2" />
+          <svg:path d="M13 11v2" />
+        }
+        @case ('key') {
+          <svg:circle cx="7.5" cy="15.5" r="5.5" />
+          <svg:path d="m21 2-9.6 9.6" />
+          <svg:path d="m15 6 3 3" />
+        }
+        @case ('mail') {
+          <svg:rect width="20" height="16" x="2" y="4" rx="2" />
+          <svg:path d="m22 7-8.97 5.7a2 2 0 0 1-2.06 0L2 7" />
+        }
+        @case ('shield') {
+          <svg:path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3v8Z" />
+          <svg:path d="m9 12 2 2 4-4" />
+        }
+        @case ('lock') {
+          <svg:rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <svg:path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        }
+        @case ('eye') {
+          <svg:path d="M2.1 12.2a1 1 0 0 1 0-.4C3.6 7.9 7.4 5 12 5s8.4 2.9 9.9 6.8a1 1 0 0 1 0 .4C20.4 16.1 16.6 19 12 19s-8.4-2.9-9.9-6.8Z" />
+          <svg:circle cx="12" cy="12" r="3" />
+        }
+        @case ('eye-off') {
+          <svg:path d="m2 2 20 20" />
+          <svg:path d="M6.7 6.7C4.5 8.1 3 10.1 2.1 12a1 1 0 0 0 0 .4C3.6 16.1 7.4 19 12 19c1.8 0 3.5-.4 4.9-1.1" />
+          <svg:path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+          <svg:path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c4.6 0 8.4 2.9 9.9 6.8a1 1 0 0 1 0 .4c-.4 1-1.1 2-1.9 2.9" />
+        }
+        @case ('clock') {
+          <svg:circle cx="12" cy="12" r="9" />
+          <svg:path d="M12 7v5l3 2" />
+        }
+        @case ('alert') {
+          <svg:path d="m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z" />
+          <svg:path d="M12 9v4" />
+          <svg:path d="M12 17h.01" />
         }
         @case ('plane-takeoff') {
           <svg:path d="M2 22h20" />
