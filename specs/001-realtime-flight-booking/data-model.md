@@ -15,6 +15,7 @@ muestran en `America/Bogota`. Los importes son pesos colombianos enteros (sin de
 | `SeatType` | `WINDOW`, `MIDDLE`, `AISLE` | ventana (A, F), medio (B, E), pasillo (C, D) |
 | `ReleaseReason` | `MANUAL`, `EXPIRED`, `FLIGHT_CANCELLED` | motivo de una liberación |
 | `FlightEventType` | `SEAT_HELD`, `SEAT_RELEASED`, `SEAT_BOOKED`, `FLIGHT_UPDATED` | tipo de entrada del registro de actividad |
+| `CardBrand` | `VISA`, `MASTERCARD`, `DISCOVER`, `OTHER` | marca de la tarjeta (se guarda con los últimos 4 dígitos) |
 
 ## Entidades y tablas
 
@@ -90,7 +91,8 @@ tarifa del vuelo.
 | `buyer_name` | `text` | 2–100 caracteres |
 | `buyer_email` | `text` | Correo válido; se guarda en minúsculas |
 | `total` | `integer` | `fare × número de asientos` |
-| `card_last4` | `char(4)` | Únicos dígitos de la tarjeta que se guardan |
+| `card_last4` | `char(4)` | Últimos 4 dígitos; con `card_brand`, lo único que se guarda de la tarjeta |
+| `card_brand` | `CardBrand` | Detectada del número con `detectCardBrand` (`@kata/shared`); migración `0002_card_brand` |
 | `created_at` | `timestamptz` | Fecha de confirmación |
 
 Índice: `(code, buyer_email)` para la consulta del boleto.
@@ -212,7 +214,12 @@ stateDiagram-v2
 | `CreateBookingRequest` | `flightId` uuid; `buyer.name` 2–100; `buyer.email` correo; `passengers` 1–4 elementos `{ seatId: ^([1-9]|[12][0-9]|30)[A-F]$, name 2–100 }` sin asientos repetidos; `card.number` 16 dígitos; `card.expiry` `MM/YY` futuro; `card.cvv` 3 dígitos |
 | `BookingLookupRequest` | `code` `^[A-Z0-9]{6}$` (se normaliza a mayúsculas); `email` correo (se normaliza a minúsculas) |
 | `UpdateFlightStatusRequest` | `{ status: 'DELAYED', newDepartureAt: ISO 8601 }` o `{ status: 'CANCELLED' }` |
-| Headers | `X-Client-Id` uuid; `Idempotency-Key` uuid; `X-Admin-Key` texto no vacío |
+| Headers | `X-Client-Id` UUID v4 (`ClientIdSchema`; otra versión → 400 `CLIENT_ID_REQUIRED`); `Idempotency-Key` uuid; `X-Admin-Key` texto no vacío |
+| Handshake del socket | `auth.clientId` UUID v4 (`ClientIdSchema`); payloads cliente → servidor con `FlightRoomPayloadSchema` |
 
 **Tarjeta ficticia de rechazo**: `4000 0000 0000 0002`. Cualquier otra tarjeta con formato válido
-se aprueba. Nunca se guarda ni se registra en logs el número completo ni el CVV.
+se aprueba. El número completo y el CVV viven solo en memoria durante el cobro: nunca se guardan
+ni se registran en logs (constitución, principio X).
+
+**Marca de la tarjeta** (`detectCardBrand`): empieza por `4` → `VISA`; `51`–`55` o
+`2221`–`2720` → `MASTERCARD`; `6011`, `65` o `644`–`649` → `DISCOVER`; cualquier otra → `OTHER`.

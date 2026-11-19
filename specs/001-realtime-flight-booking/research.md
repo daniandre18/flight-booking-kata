@@ -48,19 +48,21 @@ interfaces TypeScript sin validación (no protegen la entrada).
 **Decisión**: módulos `flights`, `seats` (bloqueos), `bookings`, `realtime`, `admin` y
 `health`. Cada uno con `domain/` (entidades y reglas puras), `application/` (casos de uso y
 puertos) e `infrastructure/` (Prisma, controladores HTTP, gateway). Puertos principales:
-`Clock`, `PaymentGateway`, `EventPublisher`, `UnitOfWork` y un repositorio por agregado
-(`FlightRepository`, `SeatHoldRepository`, `BookingRepository`, `IdempotencyStore`).
+`Clock`, `PaymentGateway`, `EventPublisher`, `UnitOfWork` y puertos segregados por
+responsabilidad (§24): `FlightStatusPort` y `FlightQueryPort`; `SeatHoldsPort`,
+`SeatQueryPort`, `SeatBookingPort` y `SeatReleasePort`; `BookingStore`, `BookingLookupPort` e
+`IdempotencyStore`.
 
 **Límites entre módulos (revisión analyze)**: cada módulo escribe solo sus tablas a través de
-su repositorio (`flights` → `flights`; `seats` → `seats`; `bookings` → `bookings`,
+sus puertos (`flights` → `flights`; `seats` → `seats`; `bookings` → `bookings`,
 `booking_seats` e `idempotency_keys`). Las operaciones que tocan varios módulos las orquesta un
 caso de uso con el puerto `UnitOfWork`, que abre una transacción; los repositorios se unen a
 ella de forma transparente mediante un contexto `AsyncLocalStorage`:
 
-- `CreateBooking` usa `IdempotencyStore`, `SeatHoldRepository.markBooked`, `BookingRepository`
-  y `FlightRepository.markSoldOutIfFull`.
-- `UpdateFlightStatus` (admin) usa `FlightRepository.cancel` o `delay` y
-  `SeatHoldRepository.releaseAllHeld`.
+- `ConfirmBookingUseCase` usa `IdempotencyStore`, `SeatBookingPort.markBooked`,
+  `BookingStore` y `FlightStatusPort.markSoldOutIfFull`.
+- `ChangeFlightStatusUseCase` (admin) usa `FlightStatusPort.cancel` o `delay` y
+  `SeatReleasePort.releaseAllHeld`.
 
 Las primitivas de persistencia que usan varios módulos no pertenecen a ninguno. Viven en
 `shared-kernel/infrastructure/persistence/`, detrás de puertos de `shared-kernel/application`
@@ -192,25 +194,26 @@ cliente); 404 (el asiento existe).
 
 ## 9. Confirmación de la reserva
 
-**Decisión** **(revisión analyze)**: el caso de uso `CreateBooking` ejecuta estos pasos dentro
+**Decisión** **(revisión analyze)**: el caso de uso `ConfirmBookingUseCase` ejecuta estos pasos dentro
 del puerto `UnitOfWork` (una sola transacción). Cada módulo escribe solo sus tablas a través
 de su puerto (§3):
 
 1. `IdempotencyStore.reserve`: inserta la clave de idempotencia (decisión 10).
 2. Lock de escritura del vuelo con la condición `status IN ('SCHEDULED','DELAYED')` (primitiva
    compartida, §6). Si falla, `422 FLIGHT_NOT_BOOKABLE` (por ejemplo, vuelo cancelado).
-3. `SeatHoldRepository.markBooked`: `UPDATE` condicional `HELD → BOOKED WHERE flight_id = :f
+3. `SeatBookingPort.markBooked`: `UPDATE` condicional `HELD → BOOKED WHERE flight_id = :f
    AND held_by = :c AND hold_expires_at > :now AND (row, letter) IN (:asientos de la
    solicitud) RETURNING id`.
 4. Verificación posterior a la escritura, dentro de la misma transacción: el conteo debe ser
    igual al número de asientos de la solicitud (si no, rollback y `410 HOLD_EXPIRED`), y el
    cliente no debe conservar otros bloqueos vigentes en el vuelo (si no, rollback y
    `422 PASSENGERS_MISMATCH`; para comprar menos, el cliente libera antes los que no quiere).
-5. `PaymentGateway.charge`. Si `FakePaymentGateway` rechaza: rollback (los asientos siguen
+5. `PaymentGateway.charge` con los datos de la tarjeta solo en memoria; devuelve marca y últimos 4
+   dígitos, lo único que se guarda (§25). Si `FakePaymentGateway` rechaza: rollback (los asientos siguen
    `HELD` con su vencimiento original) y `402 PAYMENT_DECLINED`.
-6. `BookingRepository.save`: inserta `bookings` y `booking_seats` (`UNIQUE(seat_id)` como
+6. `BookingStore.save`: inserta `bookings` y `booking_seats` (`UNIQUE(seat_id)` como
    última defensa).
-7. `FlightRepository.markSoldOutIfFull`: marca el vuelo `SOLD_OUT` con una sentencia
+7. `FlightStatusPort.markSoldOutIfFull`: marca el vuelo `SOLD_OUT` con una sentencia
    condicional si no quedan asientos sin reservar (decisión 14).
 8. Inserta los eventos en `flight_events`, hace commit y publica.
 
@@ -339,15 +342,15 @@ al reiniciar y no muestra eventos previos a abrir el tablero).
   `UPDATE flights SET status = 'SOLD_OUT' WHERE id = :f AND status IN ('SCHEDULED','DELAYED')
   AND NOT EXISTS (SELECT 1 FROM seats WHERE flight_id = :f AND status <> 'BOOKED')`; si cambia,
   se emite `flight:updated`. Nunca vuelve atrás (no hay cancelación de reservas).
-- **Retraso** **(refinamiento)**: `FlightRepository.delay`. `flights` guarda `scheduled_departure_at` (original) y
+- **Retraso** **(refinamiento)**: `FlightStatusPort.delay`. `flights` guarda `scheduled_departure_at` (original) y
   `departure_at` / `arrival_at` (vigentes). El retraso exige `newDepartureAt > departure_at`
   (si no, `422 INVALID_DELAY`) y desplaza la llegada lo mismo. El estado pasa a `DELAYED`,
   salvo si el vuelo está `SOLD_OUT`, que conserva su estado; el retraso se deduce de
   `departure_at > scheduled_departure_at`. La búsqueda usa `departure_at`, así que un retraso
   que cambia de día mueve el vuelo a los resultados de la nueva fecha.
-- **Cancelación** **(revisión analyze)**: `UpdateFlightStatus` ejecuta dentro de `UnitOfWork`:
+- **Cancelación** **(revisión analyze)**: `ChangeFlightStatusUseCase` ejecuta dentro de `UnitOfWork`:
   lock del vuelo con `status <> 'CANCELLED'` (si no, `422 FLIGHT_STATUS_CONFLICT`),
-  `FlightRepository.cancel` (pasa a `CANCELLED`) y `SeatHoldRepository.releaseAllHeld`
+  `FlightStatusPort.cancel` (pasa a `CANCELLED`) y `SeatReleasePort.releaseAllHeld`
   (libera todos los bloqueos con `RETURNING`). Emite `seat:released` (`reason:
   FLIGHT_CANCELLED`) por asiento y `flight:updated`. Las reservas existentes se conservan.
 
@@ -360,7 +363,9 @@ explota combinaciones); calcular AGOTADO al leer (la spec pide notificar el camb
 ## 15. Identidad anónima y privacidad del dueño del bloqueo **(refinamiento)**
 
 **Decisión**: el `clientId` es un UUID v4 que el frontend genera y guarda en `localStorage`
-(`ClientIdService`). Se envía en el header `X-Client-Id` (obligatorio en bloqueos, reservas y
+(`ClientIdService`). Backend, handshake del socket y frontend lo validan con el mismo
+`ClientIdSchema` de `@kata/shared` (UUID v4; otra versión → `400 CLIENT_ID_REQUIRED`). El
+`holderTag` se calcula en un único sitio (`holderTagOf`, `shared-kernel/domain`). Se envía en el header `X-Client-Id` (obligatorio en bloqueos, reservas y
 `/clients/me/holds`; sin él, `400 CLIENT_ID_REQUIRED`) y en el handshake del socket. **Nunca se
 difunde a otros clientes**: eventos y snapshots llevan `holderTag`, los primeros 16 caracteres
 hexadecimales de SHA-256(clientId). `GET /clients/me/holds` devuelve el `holderTag` propio
@@ -402,6 +407,7 @@ Un filtro global devuelve siempre `{ code, message, details }`. Mapa de códigos
 | 404 | Recurso inexistente | `FLIGHT_NOT_FOUND`, `SEAT_NOT_FOUND`, `BOOKING_NOT_FOUND` |
 | 409 | Conflicto de asiento (ya bloqueado o reservado por otro, o no es del cliente) | `SEAT_UNAVAILABLE`, `SEAT_NOT_HELD` |
 | 410 | Bloqueo expirado | `HOLD_EXPIRED` |
+| 429 | Demasiados intentos (límite de solicitudes, §25) | `TOO_MANY_REQUESTS` |
 | 422 | Validación de esquema o de negocio | `VALIDATION_ERROR`, `HOLD_LIMIT_REACHED`, `PASSENGERS_MISMATCH`, `INVALID_DELAY`, `IDEMPOTENCY_KEY_REUSED`, `FLIGHT_NOT_BOOKABLE`, `FLIGHT_STATUS_CONFLICT` |
 
 Los errores de zod se devuelven como `422 VALIDATION_ERROR` con la lista de campos en
@@ -476,6 +482,17 @@ necesita control total del diseño).
 
 - **Backend, dominio**: Jest, sin infraestructura (límite, reloj compartido, transiciones de
   vuelo, generación de código).
+- **Backend, casos de uso (constitución 1.1.0, principio V)**: cada caso de uso tiene pruebas
+  unitarias escritas antes que él, con dobles de sus puertos en `backend/test/doubles/`
+  (`InMemoryUnitOfWork`, `StubFlightWriteLock`, `InMemoryFlightEventLog`,
+  `RecordingEventPublisher`, almacenes en memoria de asientos y reservas, `ScriptedPaymentGateway`
+  y `FakeClock`).
+- **Pruebas de contrato (L de SOLID)**: una misma batería por puerto se ejecuta contra cada
+  implementación intercambiable: `Clock` (`SystemClock` y `FakeClock`), `EventPublisher`
+  (`EventEmitterPublisher` y `RecordingEventPublisher`) y `PaymentGateway`
+  (`FakePaymentGateway` y `ScriptedPaymentGateway`).
+- **Cobertura**: `pnpm test:cov` exige ≥ 80 % de líneas y ramas en `backend/src/**/domain`,
+  `backend/src/**/application` y `shared/`; el frontend publica su cobertura sin umbral.
 - **Backend, e2e**: Jest + Supertest contra PostgreSQL real con Testcontainers; si existe
   `TEST_DATABASE_URL` se usa esa base (por ejemplo, el contenedor de docker compose). Casos
   obligatorios: 100 `POST /hold` en paralelo al mismo asiento con `clientId` distintos dan
@@ -487,14 +504,17 @@ necesita control total del diseño).
   que el evento `EXPIRED` llegue a un socket suscrito en ≤ 3 s tras el vencimiento. La del
   gateway exige que un segundo socket reciba el evento en < 1 s desde la respuesta del comando.
   La validación final anota en el README los tiempos medidos.
-- **Frontend**: runner por defecto del Angular CLI; pruebas de `RealtimeService` y del reductor
-  del mapa con eventos desordenados, duplicados y con huecos.
+- **Frontend**: runner por defecto del Angular CLI (Vitest); pruebas unitarias del reductor del
+  mapa (eventos desordenados, duplicados y con huecos), `RealtimeService`, interceptores
+  (`X-Client-Id` y traducción de errores), componente del mapa (teclado y `aria-label`) y panel
+  de resumen.
 - **Opcional**: Playwright con dos contextos de navegador para la prueba de dos pestañas.
 
 **Razón**: principio V. La prueba de concurrencia solo es válida contra PostgreSQL real.
 
-**Alternativas descartadas**: SQLite o una base en memoria (no reproduce el bloqueo de filas);
-mocks del repositorio para concurrencia (no prueban nada).
+**Alternativas descartadas**: SQLite o una base en memoria para la concurrencia (no reproduce el
+bloqueo de filas); mocks del repositorio para concurrencia (no prueban nada); medir la cobertura
+con las e2e (oculta reglas sin prueba unitaria y es lenta).
 
 ## 21. Despliegue local
 
@@ -531,12 +551,97 @@ pasajeros y código deterministas, para que no haya asientos `BOOKED` sin reserv
 
 **Decisión**: ESLint + Prettier compartidos desde la raíz, sin `any` (regla
 `@typescript-eslint/no-explicit-any` como error). Logs JSON con pino (nestjs-pino) que incluyen
-`flightId`, `seatId` y `clientId` cuando aplica (nunca datos de tarjeta). `GET /health`
+`flightId`, `seatId` y el `holderTag` del cliente cuando aplica (nunca el `clientId` en claro
+ni datos de tarjeta). `GET /health`
 (fuera del prefijo `/api`, como pide la constitución, principio VIII) verifica la base con
 `SELECT 1`. Commits con Conventional Commits. **(nota G3)** Los scripts raíz `lint`,
 `typecheck` (`tsc --noEmit` en los tres paquetes) y `test` forman la puerta de calidad.
+**(constitución 1.1.0)** ESLint añade `complexity` ≤ 10, `max-lines-per-function` ≤ 40 (las
+pruebas quedan exentas solo de esta regla, por sus bloques `describe`), `max-params` ≤ 4 y
+`no-console`; la cobertura (`pnpm test:cov`) se suma a la puerta.
 
 **Razón**: principio VIII.
 
 **Alternativas descartadas**: winston (más lento y configuración más verbosa); métricas o
 tracing (fuera del alcance del prototipo).
+
+## 24. Aplicación de SOLID y DRY **(constitución 1.1.0)**
+
+**Decisión**: cada letra de SOLID tiene una regla verificable y un ejemplo concreto en el código:
+
+| Principio | Regla | Ejemplo concreto (clase o puerto) | Archivo |
+|-----------|-------|-----------------------------------|---------|
+| S | Un caso de uso por clase; controladores y gateway solo traducen protocolo | `HoldSeatUseCase`, `ReleaseSeatUseCase`, `ConfirmBookingUseCase`, `ChangeFlightStatusUseCase`; `SeatsController` valida y delega | `backend/src/seats/application/hold-seat.use-case.ts`, `backend/src/seats/infrastructure/seats.controller.ts` |
+| O | Variantes nuevas = adaptadores nuevos detrás de puertos, sin tocar casos de uso | Un proveedor de pago real sería otro adaptador de `PaymentGateway`; cambiar Socket.io por SSE sería otro `EventPublisher` | `backend/src/bookings/application/ports/payment-gateway.port.ts` |
+| L | Implementaciones intercambiables que pasan la misma prueba de contrato | `FakePaymentGateway` y `ScriptedPaymentGateway`; `SystemClock` y `FakeClock`; `EventEmitterPublisher` y `RecordingEventPublisher` | `backend/test/contracts/*.contract.ts` |
+| I | Puertos pequeños y enfocados; ningún repositorio "dios" | `SeatHoldsPort` (bloquear, liberar) separado de `SeatQueryPort` (snapshot, mis bloqueos), `SeatBookingPort` y `SeatReleasePort`; `FlightStatusPort` separado de `FlightQueryPort`; `FlightEventLog` (escritura) separado de `FlightEventQueryPort` (lectura) | `backend/src/seats/application/ports/` |
+| D | Dominio y aplicación dependen de interfaces; la infraestructura enlaza con tokens de Nest | `HoldSeatUseCase` es una clase plana (sin `@Injectable()` ni `@Inject()`) que recibe `FlightWriteContext` y `SeatHoldsPort`; `SeatsModule` la registra con `useFactory` e `inject: [FLIGHT_WRITE_CONTEXT, SEAT_HOLDS_PORT]` | `backend/src/seats/seats.module.ts`, `backend/src/shared-kernel/application/flight-write-context.ts` |
+
+**Objetos de dependencias**: `max-params` ≤ 4 choca con la inyección por constructor cuando un
+caso de uso necesita muchos puertos. Se agrupan en objetos de dependencias provistos por token:
+`FlightWriteContext` (`UnitOfWork`, `FlightWriteLock`, `FlightEventLog`, `FlightStatsReader`,
+`EventPublisher`, `Clock`) y `BookingPorts` (`IdempotencyStore`, `SeatBookingPort`,
+`PaymentGateway`, `BookingStore`, `FlightStatusPort`). `ConfirmBookingUseCase` recibe dos
+parámetros.
+
+**DRY** (una sola definición de cada cosa):
+
+| Qué | Única definición | La usan |
+|-----|------------------|---------|
+| Tipos, esquemas zod, enums y eventos | `@kata/shared` | backend (validación de entrada con `createZodDto`) y frontend (formularios y tipado) |
+| Código de error → estado HTTP | `ERROR_HTTP_STATUS` en `@kata/shared` | filtro global del backend |
+| Formato de error y traducción | `ApiExceptionFilter` (backend) | todas las rutas |
+| Código de error → mensaje en español | `error-messages.ts` (frontend) | interceptor de errores y pantallas |
+| Identidad del cliente | `ClientIdSchema` y `holderTagOf` | decorador HTTP, handshake del socket, logger y frontend |
+| Marca de tarjeta, código de asiento, fecha de Bogotá | `detectCardBrand`, `seat-code.ts`, `toBogotaDate` en `@kata/shared` | backend y frontend |
+| Lock del vuelo y numeración de eventos | `FlightWriteLock` y `FlightEventLog` | todos los casos de uso que escriben |
+
+**Razón**: constitución 1.1.0 (principios III, IV y VIII). Con reglas verificables, SOLID y DRY
+se revisan en el código y no quedan como intención.
+
+**Alternativas descartadas**: un repositorio por agregado con todos los métodos (viola I y
+obliga a dobles enormes); desactivar `max-params` para constructores (oculta dependencias
+excesivas); validar formularios con validadores propios de Angular (duplica las reglas de
+`@kata/shared`).
+
+## 25. Seguridad **(constitución 1.1.0, principio X)**
+
+**Decisión**:
+
+| Medida | Amenaza que mitiga | Dónde | Alternativa descartada |
+|--------|--------------------|-------|------------------------|
+| Validación zod de body, query, params, headers y payloads de socket con los esquemas de `@kata/shared` | Inyección, datos malformados, errores 500 provocados | `zod-validation.ts`, `@ClientId()`, `socket-handshake.ts` | Validación manual por endpoint (incompleta y duplicada) |
+| `X-Client-Id` exige UUID v4 | Identificadores adivinables o colisiones elegidas por un atacante | `ClientIdSchema` | Aceptar cualquier cadena (permite suplantar con valores triviales) |
+| helmet | Clickjacking, sniffing de MIME, cabeceras inseguras por defecto | `app.setup.ts` | Cabeceras a mano (fácil olvidar alguna) |
+| CORS restringido a `CORS_ORIGINS` | Que otro sitio use la API con el navegador del usuario | `app.setup.ts` | `origin: *` (abre la API a cualquier página) |
+| Límite de body (16 kb) | Agotamiento de memoria con cuerpos enormes | `app.setup.ts` | Límite por defecto de 100 kb (innecesariamente alto) |
+| Límite de solicitudes (`@nestjs/throttler`) con dos contadores: por IP en todas las rutas limitadas y, además, por cliente en bloqueo, liberación y confirmación; exceso → `429 TOO_MANY_REQUESTS` | Acaparar asientos, fuerza bruta de códigos de reserva y de la clave de admin; rotar `X-Client-Id` no evade el contador por IP | `rate-limits.ts`, controladores | Solo por cliente (se evade generando UUID nuevos); solo por IP (castiga a usuarios detrás de la misma NAT en las acciones de compra); en nginx (no distingue rutas ni clientes) |
+| `ADMIN_KEY` comparada con `timingSafeEqual` (sobre hashes de igual longitud) | Ataques de tiempo para adivinar la clave | `admin-key.guard.ts` | Comparación con `===` (filtra información por tiempo) |
+| Secretos solo por variables de entorno; `.env` ignorado | Fuga de secretos en el repositorio | `config.ts`, `.gitignore` | Valores por defecto en el código |
+| Tarjeta solo en memoria; se guardan marca y últimos 4 | Robo de datos de pago desde la base o los logs | `PaymentGateway`, `bookings.card_brand`, `bookings.card_last4` | Guardar el número cifrado (innecesario: no hay cobros posteriores) |
+| pino con `redact` de `X-Admin-Key`, `X-Client-Id`, `authorization` y datos de tarjeta; `holderTag` como contexto | Fuga de credenciales y datos personales en logs | `logger.module.ts` | Logs sin redact o con el `clientId` en claro |
+| Prisma con consultas parametrizadas; SQL crudo solo con tagged templates (`$queryRaw`, `Prisma.sql`) | Inyección SQL | adaptadores Prisma | `$queryRawUnsafe` o concatenación |
+| Handshake del socket valida el `clientId`; el cliente solo puede unirse o salir de rooms | Suplantación en tiempo real y eventos de estado falsificados | `socket-handshake.ts`, `realtime.gateway.ts` | Aceptar conexiones anónimas o comandos por socket |
+| Frontend sin `innerHTML` ni `bypassSecurityTrust*` (regla de ESLint y verificación de plantillas) | XSS | `eslint.config.mjs`, `scripts/check-templates.mjs` | Confiar en la revisión manual |
+| Errores sin stack, SQL ni detalles internos | Reconocimiento por parte de un atacante | `ApiExceptionFilter` | Devolver el mensaje original de la excepción |
+| Mismo 404 para código o correo incorrecto en la consulta del boleto | Enumeración de reservas | `LookupBookingUseCase` | Mensajes distintos por campo |
+| `holderTag` en vez del `clientId` en eventos y snapshots (§15) | Suplantación del cliente anónimo | `holderTagOf`, gateway | Difundir el `clientId` |
+
+**Límites de solicitudes** (revisión analyze, 1.1.0). Dos contadores con nombre: `ip` (siempre) y
+`client` (`X-Client-Id` válido). En la consulta del boleto y en admin solo cuenta la IP, porque el
+`X-Client-Id` lo elige el atacante y rotarlo evadiría el límite. Todos los valores se multiplican
+por `RATE_LIMIT_MULTIPLIER`, que el arnés e2e sube salvo en las pruebas de límites:
+
+| Ruta | Por cliente | Por IP |
+|------|-------------|--------|
+| `POST`/`DELETE …/hold` | 20 cada 10 s | 200 cada 10 s (deja pasar la prueba de 100 bloqueos simultáneos) |
+| `POST /api/bookings` | 5 por minuto | 30 por minuto |
+| `POST /api/bookings/lookup` | — | 10 por minuto |
+| `PATCH /api/admin/flights/:id/status` | — | 20 por minuto |
+| Resto de la API (salvo `/health`) | — | 300 por minuto |
+
+**Razón**: constitución 1.1.0, principio X. Son medidas baratas que cubren las amenazas
+habituales de una API pública sin autenticación real.
+
+**Alternativas descartadas**: autenticación real (fuera de alcance, principio VII); WAF o API
+gateway externo (infraestructura extra para un prototipo).

@@ -309,6 +309,27 @@ restaurarla para comprobar la resincronización. Cambiar el estado del vuelo des
   aviones de 180 asientos.
 - **RF-035**: El proyecto completo DEBE poder levantarse con un solo comando.
 
+### Requisitos no funcionales de seguridad
+
+- **RNF-001**: El sistema DEBE validar toda información que recibe (formularios, parámetros,
+  identificadores y mensajes en tiempo real). Si algo no es válido, DEBE rechazarlo sin
+  ejecutar la acción y responder con un mensaje claro que indique qué dato corregir.
+- **RNF-002**: El identificador anónimo del cliente DEBE tener un formato válido; si falta o no
+  es válido, la acción se rechaza.
+- **RNF-003**: El sistema DEBE limitar los intentos repetidos de bloquear o liberar asientos,
+  confirmar compras, consultar boletos y ejecutar acciones de administración. Al superar el
+  límite, la acción no se ejecuta y el usuario ve el mensaje "Demasiados intentos, espera un
+  momento.".
+- **RNF-004**: El número completo y el código de seguridad de la tarjeta NUNCA se almacenan ni
+  aparecen en registros; solo se conservan la marca y los últimos 4 dígitos, que se muestran en
+  el boleto.
+- **RNF-005**: Los mensajes de error NUNCA muestran detalles internos (trazas, consultas,
+  identificadores internos ni nombres de componentes).
+- **RNF-006**: Datos sensibles como la clave de administrador, el identificador del cliente y
+  los datos de la tarjeta NUNCA aparecen en los registros del sistema.
+- **RNF-007**: Solo el sitio de la aplicación puede usar el servicio desde el navegador, y el
+  servicio rechaza envíos de tamaño desproporcionado.
+
 ### Entidades clave
 
 - **Aeropuerto**: código de 3 letras y ciudad (BOG Bogotá, MDE Medellín, CLO Cali, CTG
@@ -319,8 +340,10 @@ restaurarla para comprobar la resincronización. Cambiar el estado del vuelo des
   pasillo), estado, cliente dueño del bloqueo y hora de vencimiento cuando está BLOQUEADO.
 - **Cliente**: identificador anónimo generado y conservado por el navegador.
 - **Reserva**: código único de 6 caracteres, vuelo, cliente, comprador (nombre y correo),
-  pasajeros con su asiento, total y fecha de confirmación. Nunca guarda el número completo de
-  la tarjeta.
+  pasajeros con su asiento, total y fecha de confirmación. De la tarjeta solo conserva la marca
+  y los últimos 4 dígitos.
+- **Cliente** (seguridad): su identificador anónimo es una credencial; nunca se muestra a otros
+  usuarios ni aparece en registros.
 - **Evento de actividad**: tipo (bloqueo, liberación, vencimiento, reserva, cambio de estado
   del vuelo), vuelo, asiento si aplica, nuevo estado, orden dentro del vuelo y fecha.
 
@@ -498,7 +521,8 @@ los requisitos funcionales anteriores, que siguen vigentes.
   procesando hasta recibir la respuesta, para evitar el doble envío. Si el pago es rechazado,
   el botón DEBE volver a habilitarse y verse el motivo.
 - **RUX-028**: La pantalla del boleto DEBE mostrar destacado el código de reserva y, además, el
-  vuelo (número, ruta, fecha y horas), los asientos con su pasajero y el total pagado.
+  vuelo (número, ruta, fecha y horas), los asientos con su pasajero, el total pagado y la marca
+  y los últimos 4 dígitos de la tarjeta (RNF-004).
 
 **Criterios de aceptación**:
 
@@ -571,8 +595,8 @@ los requisitos funcionales anteriores, que siguen vigentes.
 **Criterios de aceptación**:
 
 1. **Dado** cualquier error (asiento tomado, bloqueo vencido, pago rechazado, límite de 4
-   asientos, vuelo cancelado, reserva no encontrada, clave de administrador incorrecta, sin
-   conexión), **cuando** se muestra,
+   asientos, vuelo cancelado, reserva no encontrada, clave de administrador incorrecta,
+   demasiados intentos, sin conexión), **cuando** se muestra,
    **entonces** el texto está en español, no contiene códigos técnicos y dice qué pasó y qué
    hacer a continuación.
 2. **Dado** una reserva confirmada o un asiento bloqueado con éxito, **cuando** se muestra la
@@ -601,6 +625,10 @@ los requisitos funcionales anteriores, que siguen vigentes.
   búsqueda.
 - **CE-010**: Un bloqueo, liberación o reserva hecho por otro usuario se ve en el mapa en menos
   de 1 segundo. Caso concreto de CE-002 en el mapa.
+- **CE-011**: Las reglas de negocio tienen pruebas unitarias que cubren al menos el 80 % de sus
+  líneas y de sus ramas.
+- **CE-012**: 0 respuestas de error con detalles internos y 0 datos de tarjeta completos en la
+  base o en los registros, verificado por pruebas automatizadas.
 
 ## Supuestos
 

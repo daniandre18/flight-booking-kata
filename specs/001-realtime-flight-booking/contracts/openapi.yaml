@@ -95,6 +95,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: 'SEAT_UNAVAILABLE (bloqueado o reservado por otro)', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
         '422': { description: 'HOLD_LIMIT_REACHED (ya tiene 4 bloqueos en el vuelo) o FLIGHT_NOT_BOOKABLE (vuelo cancelado, agotado o ya salido)', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
     delete:
       tags: [seats]
       summary: Liberar un asiento bloqueado por el propio cliente
@@ -108,6 +109,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: 'SEAT_NOT_HELD (no es del cliente o ya venció)', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /clients/me/holds:
     get:
@@ -143,6 +145,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '410': { description: HOLD_EXPIRED, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
         '422': { description: 'VALIDATION_ERROR, PASSENGERS_MISMATCH, IDEMPOTENCY_KEY_REUSED o FLIGHT_NOT_BOOKABLE (por ejemplo, vuelo cancelado)', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /bookings/lookup:
     post:
@@ -157,6 +160,7 @@ paths:
         '200': { description: Boleto, content: { application/json: { schema: { $ref: '#/components/schemas/BookingDto' } } } }
         '404': { description: BOOKING_NOT_FOUND, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
         '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /admin/flights/{flightId}/status:
     patch:
@@ -174,6 +178,7 @@ paths:
         '401': { description: ADMIN_UNAUTHORIZED, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { description: 'VALIDATION_ERROR, INVALID_DELAY o FLIGHT_STATUS_CONFLICT (vuelo ya cancelado)', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /health:
     servers:
@@ -200,7 +205,16 @@ components:
   parameters:
     FlightId: { name: flightId, in: path, required: true, schema: { type: string, format: uuid } }
     SeatId: { name: seatId, in: path, required: true, schema: { $ref: '#/components/schemas/SeatCode' } }
-    ClientId: { name: X-Client-Id, in: header, required: true, schema: { type: string, format: uuid }, description: Identidad anónima del cliente }
+    ClientId:
+      name: X-Client-Id
+      in: header
+      required: true
+      description: 'Identidad anónima del cliente: UUID v4 generado por el navegador (ClientIdSchema de @kata/shared). Falta o tiene otra versión → 400 CLIENT_ID_REQUIRED. Nunca se difunde a otros clientes ni se registra en logs.'
+      schema:
+        type: string
+        format: uuid
+        pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
+        examples: ['3f2b8c1e-7a4d-4e9b-9c1a-2d5e6f708192']
 
   responses:
     BadRequest:
@@ -211,6 +225,11 @@ components:
       content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
     ValidationError:
       description: VALIDATION_ERROR
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+    TooManyRequests:
+      description: 'TOO_MANY_REQUESTS: demasiados intentos, espera un momento (límites por ruta en research.md §25)'
+      headers:
+        Retry-After: { description: Segundos hasta poder reintentar, schema: { type: integer } }
       content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
 
   schemas:
@@ -242,6 +261,7 @@ components:
         - PASSENGERS_MISMATCH
         - INVALID_DELAY
         - IDEMPOTENCY_KEY_REUSED
+        - TOO_MANY_REQUESTS
         - INTERNAL_ERROR
         - SERVICE_UNAVAILABLE
 
@@ -381,7 +401,7 @@ components:
         card:
           type: object
           required: [number, expiry, cvv]
-          description: 'Ficticia. 4000000000000002 siempre se rechaza'
+          description: 'Ficticia. 4000000000000002 siempre se rechaza. Solo vive en memoria durante el cobro: nunca se guarda ni se registra'
           properties:
             number: { type: string, pattern: '^[0-9]{16}$' }
             expiry: { type: string, pattern: '^(0[1-9]|1[0-2])/[0-9]{2}$', description: 'MM/YY, futuro' }
@@ -396,7 +416,7 @@ components:
 
     BookingDto:
       type: object
-      required: [code, flight, buyer, passengers, total, cardLast4, createdAt]
+      required: [code, flight, buyer, passengers, total, cardBrand, cardLast4, createdAt]
       properties:
         code: { type: string, pattern: '^[A-Z0-9]{6}$' }
         flight: { $ref: '#/components/schemas/FlightDto' }
@@ -416,6 +436,7 @@ components:
               name: { type: string }
               type: { $ref: '#/components/schemas/SeatType' }
         total: { type: integer }
+        cardBrand: { type: string, enum: [VISA, MASTERCARD, DISCOVER, OTHER], description: Marca detectada; con cardLast4 es lo único que se guarda de la tarjeta }
         cardLast4: { type: string, pattern: '^[0-9]{4}$' }
         createdAt: { type: string, format: date-time }
 

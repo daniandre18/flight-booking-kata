@@ -10,19 +10,22 @@ documento las describe.
 |---------|-------|
 | Namespace | `/realtime` |
 | Ruta | `/socket.io` (por defecto; nginx hace proxy con upgrade) |
-| Handshake | `auth: { clientId: <uuid> }`. Sin `clientId` válido se acepta igual, pero solo para lectura: los eventos no dependen del cliente |
+| Handshake | `auth: { clientId: <uuid v4> }`, validado con `ClientIdSchema` de `@kata/shared` (constitución, principio X). Sin `clientId` válido la conexión se rechaza con `connect_error` y mensaje `CLIENT_ID_REQUIRED` |
 | Rooms | `flight:{flightId}` (mapa y tablero) y `search` (resultados de búsqueda) |
 | Reconexión | Automática del cliente Socket.io; al reconectar, el cliente vuelve a unirse a sus rooms y pide snapshot |
 
-El socket **no acepta comandos** de negocio (principio II): bloquear, liberar, confirmar y
-cambiar estado van por REST ([openapi.yaml](./openapi.yaml)). Los eventos se emiten solo
+El socket **no acepta comandos** de negocio ni eventos de estado emitidos por clientes
+(principios II y X): un evento desconocido se ignora y no se reenvía. Los payloads de
+cliente → servidor se validan con los esquemas de `@kata/shared`; si no son válidos, el ack
+responde `{ ok: false, code: 'VALIDATION_ERROR' }`. Los comandos (bloquear, liberar, confirmar y
+cambiar estado) van por REST ([openapi.yaml](./openapi.yaml)). Los eventos se emiten solo
 **después del commit**.
 
 ## Cliente → servidor
 
 | Evento | Payload | Ack | Efecto |
 |--------|---------|-----|--------|
-| `flight:join` | `{ flightId: uuid }` | `{ ok: true, seq: number }` o `{ ok: false, code: 'FLIGHT_NOT_FOUND' }` | Une el socket al room `flight:{flightId}` |
+| `flight:join` | `{ flightId: uuid }` | `{ ok: true, seq: number }` o `{ ok: false, code: 'FLIGHT_NOT_FOUND' \| 'VALIDATION_ERROR' }` | Une el socket al room `flight:{flightId}` |
 | `flight:leave` | `{ flightId: uuid }` | `{ ok: true }` | Sale del room |
 | `search:subscribe` | `{}` | `{ ok: true }` | Une el socket al room `search` |
 
